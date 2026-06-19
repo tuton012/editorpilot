@@ -7,8 +7,28 @@ import sqlite3InitModule from './vendor/sqlite-wasm/index.mjs';
 
 const WASM_BASE = new URL('./vendor/sqlite-wasm/', import.meta.url).href;
 const DB_FILE = '/calmworkspace.db';
+const POOL_NAME = 'editorpilot-opfs';
+const POOL_DIR = '/.editorpilot-opfs';
 
 let db = null;
+let workerInitPromise = null;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAccessHandleBusy(err) {
+  const msg = err?.message || String(err);
+  return (
+    msg.includes('createSyncAccessHandle') ||
+    msg.includes('Access Handle') ||
+    msg.includes('Access Handles cannot be created')
+  );
+}
+
+function isSqliteOpfsNoise(msg) {
+  return typeof msg === 'string' && msg.includes('Ignoring inability to install OPFS sqlite3_vfs');
+}
 
 function exec(sql, bind = []) {
   db.exec({ sql, bind });
@@ -130,8 +150,9 @@ function importAllDataInternal(data) {
 }
 
 async function openOpfsDatabase(sqlite3) {
+  const hasSab = typeof SharedArrayBuffer !== 'undefined';
   const hasStandardOpfs =
-    sqlite3.oo1?.OpfsDb && sqlite3.capi?.sqlite3_vfs_find?.('opfs');
+    hasSab && sqlite3.oo1?.OpfsDb && sqlite3.capi?.sqlite3_vfs_find?.('opfs');
 
   if (hasStandardOpfs) {
     db = new sqlite3.oo1.OpfsDb(DB_FILE, 'c');
@@ -146,27 +167,52 @@ async function openOpfsDatabase(sqlite3) {
     );
   }
 
-  const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
-    name: 'editorpilot-opfs',
-    directory: '/.editorpilot-opfs',
-    initialCapacity: 8,
-    forceReinitIfPreviouslyFailed: true,
-  });
+  const maxAttempts = 6;
+  let lastError = null;
 
-  if (!poolUtil?.OpfsSAHPoolDb) {
-    throw new Error('OPFS pool failed to initialize.');
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
+        name: POOL_NAME,
+        directory: POOL_DIR,
+        initialCapacity: 8,
+      });
+
+      if (!poolUtil?.OpfsSAHPoolDb) {
+        throw new Error('OPFS pool failed to initialize.');
+      }
+
+      db = new poolUtil.OpfsSAHPoolDb(DB_FILE, 'c');
+      createTables();
+      console.log('[DB] OPFS ready (opfs-sahpool) at', DB_FILE);
+      return { opfs: true, vfs: 'opfs-sahpool', file: DB_FILE };
+    } catch (err) {
+      lastError = err;
+      if (isAccessHandleBusy(err) && attempt < maxAttempts) {
+        console.warn(`[DB] OPFS pool busy (attempt ${attempt}/${maxAttempts}), retrying…`);
+        await sleep(350 * attempt);
+        continue;
+      }
+      break;
+    }
   }
 
-  db = new poolUtil.OpfsSAHPoolDb(DB_FILE, 'c');
-  createTables();
-  console.log('[DB] OPFS ready (opfs-sahpool) at', DB_FILE);
-  return { opfs: true, vfs: 'opfs-sahpool', file: DB_FILE };
+  if (isAccessHandleBusy(lastError)) {
+    throw new Error(
+      'EditorPilot storage is locked — close other EditorPilot tabs, wait a few seconds, then refresh.'
+    );
+  }
+
+  throw lastError;
 }
 
 async function initDb() {
   const sqlite3 = await sqlite3InitModule({
     print: () => {},
-    printErr: (msg) => console.error('[DB worker]', msg),
+    printErr: (msg) => {
+      if (isSqliteOpfsNoise(msg)) return;
+      console.error('[DB worker]', msg);
+    },
     locateFile: (file) => WASM_BASE + file,
   });
 
@@ -184,8 +230,17 @@ async function initDb() {
   }
 }
 
+async function ensureInitialized() {
+  if (workerInitPromise) return workerInitPromise;
+  workerInitPromise = initDb().catch((err) => {
+    workerInitPromise = null;
+    throw err;
+  });
+  return workerInitPromise;
+}
+
 const handlers = {
-  init: () => initDb(),
+  init: () => ensureInitialized(),
 
   saveDocument(doc) {
     const now = new Date().toISOString();
@@ -333,7 +388,7 @@ const handlers = {
   },
 };
 
-self.onmessage = async (event) => {
+async function handleRpc(event, reply) {
   const { id, method, args = [] } = event.data;
 
   try {
@@ -342,12 +397,24 @@ self.onmessage = async (event) => {
       throw new Error(`Unknown DB method: ${method}`);
     }
     if (method !== 'init' && !db) {
-      throw new Error('Database not initialized');
+      await ensureInitialized();
     }
     const result = await handler(...args);
-    self.postMessage({ id, result });
+    reply({ id, result });
   } catch (err) {
     console.error('[DB worker]', err);
-    self.postMessage({ id, error: err?.message || String(err) });
+    reply({ id, error: err?.message || String(err) });
   }
-};
+}
+
+const isSharedWorker =
+  typeof SharedWorkerGlobalScope !== 'undefined' && self instanceof SharedWorkerGlobalScope;
+
+if (isSharedWorker) {
+  self.onconnect = (event) => {
+    const port = event.ports[0];
+    port.onmessage = (ev) => handleRpc(ev, (msg) => port.postMessage(msg));
+  };
+} else {
+  self.onmessage = (ev) => handleRpc(ev, (msg) => self.postMessage(msg));
+}

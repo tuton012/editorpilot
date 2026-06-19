@@ -1,0 +1,15 @@
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
+/editor/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
+/editor/vendor/sqlite-wasm/sqlite3.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: same-origin
+
+/vendor/sqlite-wasm/sqlite3.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: same-origin

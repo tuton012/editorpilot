@@ -1705,7 +1705,8 @@ async function bootstrap() {
     }
   } catch (err) {
     console.error('[ERROR]', err);
-    showToast(err.message || 'Database init failed');
+    const msg = err?.message || 'Database init failed';
+    showToast(msg.includes('locked') ? msg : `Storage error — ${msg}`);
   }
 }
 
