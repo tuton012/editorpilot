@@ -407,14 +407,4 @@ async function handleRpc(event, reply) {
   }
 }
 
-const isSharedWorker =
-  typeof SharedWorkerGlobalScope !== 'undefined' && self instanceof SharedWorkerGlobalScope;
-
-if (isSharedWorker) {
-  self.onconnect = (event) => {
-    const port = event.ports[0];
-    port.onmessage = (ev) => handleRpc(ev, (msg) => port.postMessage(msg));
-  };
-} else {
-  self.onmessage = (ev) => handleRpc(ev, (msg) => self.postMessage(msg));
-}
+self.onmessage = (ev) => handleRpc(ev, (msg) => self.postMessage(msg));

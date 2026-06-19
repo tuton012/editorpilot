@@ -1,59 +1,36 @@
 /**
  * EditorPilot — Database API (main thread proxy to OPFS worker).
  * SQLite WASM + OPFS only — no localStorage fallback.
- * Uses SharedWorker when available so all tabs share one OPFS pool.
+ * Uses a dedicated Worker (OPFS sync APIs are not available in SharedWorkers).
  */
 
-let transport = null;
+let worker = null;
 let nextId = 0;
 const pending = new Map();
 let initPromise = null;
 
 const WORKER_URL = new URL('./db-worker.js', import.meta.url);
 
-function attachMessageHandler(onMessage) {
-  onMessage((event) => {
+function attachWorkerHandlers(w) {
+  w.onmessage = (event) => {
     const { id, result, error } = event.data;
     const entry = pending.get(id);
     if (!entry) return;
     pending.delete(id);
     if (error) entry.reject(new Error(error));
     else entry.resolve(result);
-  });
-}
-
-function createTransport() {
-  if (typeof SharedWorker !== 'undefined') {
-    try {
-      const shared = new SharedWorker(WORKER_URL, {
-        type: 'module',
-        name: 'editorpilot-db-v1',
-      });
-      shared.port.start();
-      attachMessageHandler((handler) => {
-        shared.port.onmessage = handler;
-      });
-      shared.onerror = (err) => {
-        console.error('[DB]', err);
-        rejectAllPending(err.message || 'Shared database worker error');
-      };
-      console.log('[DB] Using SharedWorker (one OPFS pool for all tabs)');
-      return (msg) => shared.port.postMessage(msg);
-    } catch (err) {
-      console.warn('[DB] SharedWorker unavailable, using dedicated worker:', err);
-    }
-  }
-
-  const worker = new Worker(WORKER_URL, { type: 'module' });
-  attachMessageHandler((handler) => {
-    worker.onmessage = handler;
-  });
-  worker.onerror = (err) => {
+  };
+  w.onerror = (err) => {
     console.error('[DB]', err);
     rejectAllPending(err.message || 'Database worker error');
   };
-  console.log('[DB] Using dedicated Worker — keep only one EditorPilot tab open');
-  return (msg) => worker.postMessage(msg);
+}
+
+function createWorker() {
+  const w = new Worker(WORKER_URL, { type: 'module' });
+  attachWorkerHandlers(w);
+  console.log('[DB] Using dedicated Worker for OPFS');
+  return w;
 }
 
 function rejectAllPending(message) {
@@ -63,18 +40,18 @@ function rejectAllPending(message) {
   pending.clear();
 }
 
-function getTransport() {
-  if (!transport) {
-    transport = createTransport();
+function getWorker() {
+  if (!worker) {
+    worker = createWorker();
   }
-  return transport;
+  return worker;
 }
 
 function rpc(method, ...args) {
   return new Promise((resolve, reject) => {
     const id = ++nextId;
     pending.set(id, { resolve, reject });
-    getTransport()({ id, method, args });
+    getWorker().postMessage({ id, method, args });
   });
 }
 
@@ -84,18 +61,33 @@ function rpc(method, ...args) {
 export async function initDatabase() {
   if (initPromise) return initPromise;
 
-  const runInit = () =>
-    rpc('init').then((result) => {
+  const runInit = async () => {
+    try {
+      const result = await rpc('init');
       console.log('[DB] SQLite OPFS initialized via', result?.vfs || 'opfs');
       return result;
-    });
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (msg.includes('Missing required OPFS APIs')) {
+        throw new Error(
+          'OPFS storage is not available in this browser. Use Chrome, Edge, or Firefox over HTTPS or localhost.'
+        );
+      }
+      if (msg.includes('locked') || msg.includes('Access Handle')) {
+        throw new Error(
+          'EditorPilot storage is locked — close other EditorPilot tabs, wait a few seconds, then refresh.'
+        );
+      }
+      throw err;
+    }
+  };
 
-  initPromise =
-    typeof navigator !== 'undefined' && navigator.locks?.request
-      ? navigator.locks.request('editorpilot-db-init', runInit)
-      : runInit();
-
-  initPromise.catch((err) => {
+  initPromise = (async () => {
+    if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+      return navigator.locks.request('editorpilot-db-init', runInit);
+    }
+    return runInit();
+  })().catch((err) => {
     initPromise = null;
     throw err;
   });
