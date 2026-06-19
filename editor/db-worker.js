@@ -130,27 +130,59 @@ function importAllDataInternal(data) {
   }
 }
 
-async function initDb() {
-  if (!self.crossOriginIsolated) {
+async function openOpfsDatabase(sqlite3) {
+  const hasStandardOpfs =
+    sqlite3.oo1?.OpfsDb && sqlite3.capi?.sqlite3_vfs_find?.('opfs');
+
+  if (hasStandardOpfs) {
+    db = new sqlite3.oo1.OpfsDb(DB_FILE, 'c');
+    createTables();
+    console.log('[DB] OPFS ready (opfs VFS) at', db.filename);
+    return { opfs: true, vfs: 'opfs', file: db.filename };
+  }
+
+  if (typeof sqlite3.installOpfsSAHPoolVfs !== 'function') {
     throw new Error(
-      'Cross-origin isolation is required for OPFS. Serve the app with COOP/COEP headers (use the included service worker on localhost).'
+      'OPFS is not available in this browser. Use Chrome, Edge, Firefox 111+, or Safari 16.4+ over localhost or HTTPS.'
     );
   }
 
+  const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
+    name: 'editorpilot-opfs',
+    directory: '/.editorpilot-opfs',
+    initialCapacity: 8,
+    forceReinitIfPreviouslyFailed: true,
+  });
+
+  if (!poolUtil?.OpfsSAHPoolDb) {
+    throw new Error('OPFS pool failed to initialize.');
+  }
+
+  db = new poolUtil.OpfsSAHPoolDb(DB_FILE, 'c');
+  createTables();
+  console.log('[DB] OPFS ready (opfs-sahpool) at', DB_FILE);
+  return { opfs: true, vfs: 'opfs-sahpool', file: DB_FILE };
+}
+
+async function initDb() {
   const sqlite3 = await sqlite3InitModule({
     print: () => {},
     printErr: (msg) => console.error('[DB worker]', msg),
     locateFile: (file) => WASM_BASE + file,
   });
 
-  if (!('opfs' in sqlite3)) {
-    throw new Error('OPFS is not available in this browser.');
+  try {
+    return await openOpfsDatabase(sqlite3);
+  } catch (err) {
+    console.error('[DB worker] OPFS init failed:', {
+      crossOriginIsolated: self.crossOriginIsolated,
+      sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+      opfsDb: !!sqlite3.oo1?.OpfsDb,
+      sahpool: typeof sqlite3.installOpfsSAHPoolVfs === 'function',
+      error: err?.message || err,
+    });
+    throw err;
   }
-
-  db = new sqlite3.oo1.OpfsDb(DB_FILE);
-  createTables();
-  console.log('[DB] OPFS database ready at', db.filename);
-  return { opfs: true, file: db.filename };
 }
 
 const handlers = {

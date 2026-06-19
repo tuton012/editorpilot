@@ -40,22 +40,14 @@ function rpc(method, ...args) {
 
 /**
  * Initialize SQLite OPFS database in a dedicated worker.
- * Throws if cross-origin isolation or OPFS is unavailable.
+ * Uses opfs-sahpool when the standard opfs VFS is unavailable (e.g. COEP credentialless).
  */
 export async function initDatabase() {
   if (initPromise) return initPromise;
 
-  if (!window.crossOriginIsolated) {
-    const err = new Error(
-      'Cross-origin isolation is required for local storage. Reload the page so the service worker can enable it (localhost or HTTPS).'
-    );
-    console.error('[DB]', err.message);
-    throw err;
-  }
-
   initPromise = rpc('init')
     .then((result) => {
-      console.log('[DB] SQLite OPFS initialized');
+      console.log('[DB] SQLite OPFS initialized via', result?.vfs || 'opfs');
       return result;
     })
     .catch((err) => {
