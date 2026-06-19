@@ -216,6 +216,13 @@ async function initDb() {
     locateFile: (file) => WASM_BASE + file,
   });
 
+  // Standard opfs VFS logs via console.warn during bootstrap — not fatal for sahpool.
+  const origWarn = console.warn;
+  console.warn = (...args) => {
+    const text = args.map(String).join(' ');
+    if (isSqliteOpfsNoise(text)) return;
+    origWarn.apply(console, args);
+  };
   try {
     return await openOpfsDatabase(sqlite3);
   } catch (err) {
@@ -227,6 +234,8 @@ async function initDb() {
       error: err?.message || err,
     });
     throw err;
+  } finally {
+    console.warn = origWarn;
   }
 }
 

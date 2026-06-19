@@ -1067,7 +1067,7 @@ async function deleteDraft(id) {
   }
 }
 
-async function loadDraft(id) {
+async function loadDraft(id, { silent = false } = {}) {
   try {
     const doc = await getDocument(id);
     if (!doc) return;
@@ -1089,7 +1089,7 @@ async function loadDraft(id) {
     scheduleDebouncedAI();
 
     await refreshDraftsList();
-    showToast('Draft loaded');
+    if (!silent) showToast('Draft loaded');
   } catch (err) {
     console.error('[ERROR]', err);
   }
@@ -1626,6 +1626,18 @@ function bindEvents() {
   document.getElementById('btn-delete-all').addEventListener('click', deleteAllLocalData);
 
   document.getElementById('btn-setup').addEventListener('click', () => openSetupWizard(true));
+
+  window.addEventListener('pagehide', () => {
+    clearTimeout(autosaveTimer);
+    void performAutosave();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      clearTimeout(autosaveTimer);
+      void performAutosave();
+    }
+  });
 }
 
 // ---- Bootstrap ----
@@ -1697,7 +1709,7 @@ async function bootstrap() {
 
     const docs = await getDocuments(1);
     if (docs.length) {
-      await loadDraft(docs[0].id);
+      await loadDraft(docs[0].id, { silent: true });
     } else {
       currentDocId = generateId('doc');
       undoStack = [''];

@@ -5,3 +5,6 @@
 /vendor/sqlite-wasm/sqlite3.wasm
   Content-Type: application/wasm
   Cross-Origin-Resource-Policy: same-origin
+
+/vendor/sqlite-wasm/*
+  Cross-Origin-Resource-Policy: same-origin
