@@ -229,6 +229,13 @@
     <span class="donate-fab-icon" aria-hidden="true">♥</span>
   </button>
 
+  <aside id="offline-hint" class="offline-hint" hidden aria-labelledby="offline-hint-title">
+    <button type="button" class="offline-hint-close" id="offline-hint-close" aria-label="Dismiss">×</button>
+    <p id="offline-hint-title" class="offline-hint-title">For offline use, install the desktop app.</p>
+    <p class="offline-hint-note">You must wait until the model finishes downloading before you can use EditorPilot offline.</p>
+    <button type="button" class="btn btn-sm btn-primary offline-hint-install" id="offline-hint-install" hidden>Install app</button>
+  </aside>
+
   <div id="issue-popup" class="issue-popup" hidden role="dialog" aria-label="Grammar suggestion">
     <p class="issue-original" id="popup-original"></p>
     <p class="issue-suggestion" id="popup-suggestion"></p>

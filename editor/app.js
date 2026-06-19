@@ -1431,35 +1431,81 @@ function isAppInstalled() {
   );
 }
 
+async function promptAppInstall() {
+  if (!deferredInstallPrompt) return false;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('btn-install')?.setAttribute('hidden', '');
+  document.getElementById('offline-hint-install')?.setAttribute('hidden', '');
+  hideOfflineHint();
+  if (outcome === 'accepted') {
+    showToast('EditorPilot installed — open from your desktop or home screen');
+  }
+  return outcome === 'accepted';
+}
+
+function hideOfflineHint() {
+  const hint = document.getElementById('offline-hint');
+  if (hint) hint.hidden = true;
+}
+
+function showOfflineInstallButton() {
+  document.getElementById('btn-install')?.removeAttribute('hidden');
+  document.getElementById('offline-hint-install')?.removeAttribute('hidden');
+}
+
+async function initOfflineHint() {
+  const hint = document.getElementById('offline-hint');
+  if (!hint || isAppInstalled()) return;
+
+  try {
+    const dismissed = await getPreference('offline_hint_dismissed');
+    if (dismissed === '1') return;
+  } catch {
+    /* show hint even if prefs unavailable */
+  }
+
+  hint.hidden = false;
+
+  document.getElementById('offline-hint-close')?.addEventListener('click', async () => {
+    hideOfflineHint();
+    try {
+      await setPreference('offline_hint_dismissed', '1');
+    } catch {
+      /* ignore */
+    }
+  });
+
+  document.getElementById('offline-hint-install')?.addEventListener('click', () => {
+    void promptAppInstall();
+  });
+}
+
 function bindPwaInstall() {
   const btnInstall = document.getElementById('btn-install');
   if (!btnInstall) return;
 
   if (isAppInstalled()) {
     btnInstall.hidden = true;
+    hideOfflineHint();
     return;
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    btnInstall.hidden = false;
+    showOfflineInstallButton();
   });
 
-  btnInstall.addEventListener('click', async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    btnInstall.hidden = true;
-    if (outcome === 'accepted') {
-      showToast('EditorPilot installed — open from your desktop or home screen');
-    }
+  btnInstall.addEventListener('click', () => {
+    void promptAppInstall();
   });
 
   window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
     btnInstall.hidden = true;
+    hideOfflineHint();
   });
 }
 
@@ -1695,6 +1741,7 @@ async function bootstrap() {
 
   try {
     await initDatabase();
+    await initOfflineHint();
 
     const ignored = await getIgnoredIssues();
     ignored.forEach((row) => {

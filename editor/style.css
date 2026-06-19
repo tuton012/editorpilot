@@ -1543,6 +1543,66 @@ html[data-theme="dark"] .app.focus-mode::after {
   box-shadow: 0 6px 24px rgba(29, 78, 216, 0.6);
 }
 
+/* ---- Offline install hint ---- */
+
+.offline-hint {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1500;
+  width: min(280px, calc(100vw - 40px));
+  padding: 14px 36px 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.offline-hint-title {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.offline-hint-note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-light);
+}
+
+.offline-hint-install {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.offline-hint-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.offline-hint-close:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.app.focus-mode .offline-hint {
+  display: none;
+}
+
 .modal-card {
   width: 100%;
   max-width: 420px;
