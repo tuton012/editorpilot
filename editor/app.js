@@ -73,7 +73,7 @@ const LEGAL_CONTENT = {
       <h3>Data we do not collect</h3>
       <p>We do not receive, store, or sell your text, corrections, or personal information. There is no account system and no analytics tied to your content.</p>
       <h3>Local storage</h3>
-      <p>Your drafts and settings are saved in browser storage (SQLite WASM snapshot and localStorage). You can export or delete this data anytime from the app.</p>
+      <p>Your drafts and settings are saved locally with SQLite WASM and the Origin Private File System (OPFS). You can export or delete this data anytime from the app.</p>
       <h3>Third-party models</h3>
       <p>Language models load from public CDNs on first use and are cached in your browser. No text is sent to a backend operated by EditorPilot.</p>`,
   },
@@ -106,7 +106,7 @@ const LEGAL_CONTENT = {
       <p>Thank you to the teams behind:</p>
       <ul style="margin:0;padding-left:1.2rem;line-height:1.6">
         <li><strong>WebLLM</strong> / MLC — local in-browser language models</li>
-        <li><strong>SQLite WASM</strong> — on-device persistence</li>
+        <li><strong>SQLite WASM + OPFS</strong> — on-device persistence</li>
         <li><strong>WebGPU</strong> — fast local inference</li>
         <li>Qwen, Gemma, and other open model weights distributed via MLC</li>
       </ul>
@@ -1681,6 +1681,20 @@ async function bootstrap() {
       }
     }
 
+    const gpu = await checkWebGPUSupport();
+    if (!gpu.supported) {
+      statusText.textContent = gpu.reason;
+      statusDot.classList.add('error');
+      showToast('WebGPU unavailable — updates disabled');
+    } else {
+      try {
+        await initAI(getSelectedModelPref());
+      } catch (err) {
+        console.error('[ERROR]', err);
+        showToast('Model failed to load — try refreshing');
+      }
+    }
+
     const docs = await getDocuments(1);
     if (docs.length) {
       await loadDraft(docs[0].id);
@@ -1691,22 +1705,7 @@ async function bootstrap() {
     }
   } catch (err) {
     console.error('[ERROR]', err);
-    showToast('Database init failed — data may not persist');
-  }
-
-  const gpu = await checkWebGPUSupport();
-  if (!gpu.supported) {
-    statusText.textContent = gpu.reason;
-    statusDot.classList.add('error');
-    showToast('WebGPU unavailable — updates disabled');
-    return;
-  }
-
-  try {
-    await initAI(getSelectedModelPref());
-  } catch (err) {
-    console.error('[ERROR]', err);
-    showToast('Model failed to load — try refreshing');
+    showToast(err.message || 'Database init failed');
   }
 }
 

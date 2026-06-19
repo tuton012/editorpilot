@@ -29,6 +29,7 @@ let engine = null;
 let currentModelId = null;
 let isReady = false;
 let isLoading = false;
+let initPromise = null;
 let sessionId = 0;
 let onStatusChange = null;
 let aiChain = Promise.resolve();
@@ -105,8 +106,6 @@ export async function checkWebGPUSupport() {
 }
 
 export async function initAI(preferredModel, { force = false } = {}) {
-  if (isLoading) return engine;
-
   const pref = preferredModel || selectedModelPref;
   const modelId = resolveModelId(pref);
 
@@ -115,6 +114,21 @@ export async function initAI(preferredModel, { force = false } = {}) {
     return engine;
   }
 
+  if (!force && initPromise) {
+    return initPromise;
+  }
+
+  initPromise = loadEngine(pref, modelId);
+
+  try {
+    return await initPromise;
+  } catch (err) {
+    initPromise = null;
+    throw err;
+  }
+}
+
+async function loadEngine(pref, modelId) {
   const gpuCheck = await checkWebGPUSupport();
   if (!gpuCheck.supported) {
     emitStatus(gpuCheck.reason, 'error');
@@ -176,6 +190,7 @@ export async function switchModel(modelPref) {
     return engine;
   }
 
+  initPromise = null;
   isReady = false;
   engine = null;
   isLoading = false;
@@ -367,10 +382,13 @@ function isStale(requestId) {
 }
 
 async function generateCorrection(mode, text, requestId, options = {}) {
-  if (!engine || !isReady) {
+  try {
     await initAI();
+  } catch (err) {
+    console.error('[ERROR]', err);
+    return null;
   }
-  if (isStale(requestId)) return null;
+  if (isStale(requestId) || !engine || !isReady) return null;
 
   const { maxTokens = 512, temperature = 0.1 } = options;
   const { system, user } = getCorrectionMessages(mode, text);
@@ -391,10 +409,13 @@ async function generateCorrection(mode, text, requestId, options = {}) {
 }
 
 async function generate(prompt, requestId, options = {}) {
-  if (!engine || !isReady) {
+  try {
     await initAI();
+  } catch (err) {
+    console.error('[ERROR]', err);
+    return null;
   }
-  if (isStale(requestId)) return null;
+  if (isStale(requestId) || !engine || !isReady) return null;
 
   const { maxTokens = 512, temperature = 0.1 } = options;
 
