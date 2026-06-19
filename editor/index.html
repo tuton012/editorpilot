@@ -4,8 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="EditorPilot — Edit with Confidence. Private writing help on your device.">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="EditorPilot">
   <title>EditorPilot- Write with Confidence</title>
   <link rel="icon" href="logo.png" type="image/png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
   <script>window.coi = { coepCredentialless: () => true };</script>
   <script src="coi-serviceworker.js"></script>
@@ -64,6 +71,7 @@
           </select>
         </div>
         <div class="header-actions">
+          <button type="button" class="btn btn-ghost" id="btn-install" hidden>Install</button>
           <button type="button" class="btn btn-ghost" id="btn-export">Export</button>
           <button type="button" class="btn btn-ghost" id="btn-import">Import</button>
           <button type="button" class="btn btn-ghost" id="btn-setup">Setup</button>

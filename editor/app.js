@@ -1419,6 +1419,50 @@ function bindSetupWizard() {
   });
 }
 
+// ---- PWA install ----
+
+let deferredInstallPrompt = null;
+
+function isAppInstalled() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function bindPwaInstall() {
+  const btnInstall = document.getElementById('btn-install');
+  if (!btnInstall) return;
+
+  if (isAppInstalled()) {
+    btnInstall.hidden = true;
+    return;
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    btnInstall.hidden = false;
+  });
+
+  btnInstall.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    btnInstall.hidden = true;
+    if (outcome === 'accepted') {
+      showToast('EditorPilot installed — open from your desktop or home screen');
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    btnInstall.hidden = true;
+  });
+}
+
 // ---- Event bindings ----
 
 function bindEvents() {
@@ -1644,6 +1688,7 @@ function bindEvents() {
 
 async function bootstrap() {
   bindEvents();
+  bindPwaInstall();
   bindSetupWizard();
   updateNewUpdatePanel('');
   updateDocStats('');

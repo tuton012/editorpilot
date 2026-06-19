@@ -2,6 +2,9 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
 
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+
 /vendor/sqlite-wasm/sqlite3.wasm
   Content-Type: application/wasm
   Cross-Origin-Resource-Policy: same-origin

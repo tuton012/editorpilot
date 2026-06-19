@@ -1,13 +1,46 @@
-/*! coi-serviceworker v0.1.7 — enables cross-origin isolation on static hosts */
+/*! EditorPilot service worker — COOP/COEP + offline PWA cache */
 let coepCredentialless = true;
 
+const CACHE_VERSION = 'editorpilot-pwa-v1';
+
+const PRECACHE_URLS = [
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './ai.js',
+  './db.js',
+  './db-worker.js',
+  './scores.js',
+  './logo.png',
+  './manifest.webmanifest',
+  './vendor/sqlite-wasm/index.mjs',
+  './vendor/sqlite-wasm/sqlite3.wasm',
+  './vendor/sqlite-wasm/sqlite3-opfs-async-proxy.js',
+];
+
 if (typeof window === 'undefined') {
-  self.addEventListener('install', () => self.skipWaiting());
-  self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+  self.addEventListener('install', (event) => {
+    self.skipWaiting();
+    event.waitUntil(precache());
+  });
+
+  self.addEventListener('activate', (event) => {
+    event.waitUntil(
+      (async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)));
+        await self.clients.claim();
+      })()
+    );
+  });
 
   self.addEventListener('message', (ev) => {
     if (ev.data?.type === 'coepCredentialless') {
       coepCredentialless = !!ev.data.value;
+    }
+    if (ev.data?.type === 'SKIP_WAITING') {
+      self.skipWaiting();
     }
   });
 
@@ -26,7 +59,6 @@ if (typeof window === 'undefined') {
     }
     newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
 
-    // 204/304/101 must not include a body (Cloudflare often serves 304).
     if (response.status === 101 || response.status === 204 || response.status === 304) {
       return new Response(null, {
         status: response.status,
@@ -42,6 +74,39 @@ if (typeof window === 'undefined') {
     });
   }
 
+  function wrapCached(response) {
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set(
+      'Cross-Origin-Embedder-Policy',
+      coepCredentialless ? 'credentialless' : 'require-corp'
+    );
+    if (!coepCredentialless) {
+      newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+    newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
+  }
+
+  async function precache() {
+    const cache = await caches.open(CACHE_VERSION);
+    await Promise.all(
+      PRECACHE_URLS.map(async (url) => {
+        try {
+          const response = await fetch(url, { cache: 'no-cache' });
+          if (response.ok) {
+            await cache.put(url, wrapResponse(response.clone()));
+          }
+        } catch (err) {
+          console.warn('[SW] precache skipped:', url, err);
+        }
+      })
+    );
+  }
+
   self.addEventListener('fetch', (event) => {
     const request = event.request;
     if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') {
@@ -53,13 +118,49 @@ if (typeof window === 'undefined') {
         ? new Request(request, { credentials: 'omit' })
         : request;
 
+    const url = new URL(request.url);
+    const isSameOrigin = url.origin === self.location.origin;
+    const isGet = request.method === 'GET';
+
+    if (!isGet || !isSameOrigin) {
+      event.respondWith(
+        fetch(fetchRequest)
+          .then(wrapResponse)
+          .catch((e) => {
+            console.error('[COI]', e);
+            return fetch(fetchRequest);
+          })
+      );
+      return;
+    }
+
     event.respondWith(
-      fetch(fetchRequest)
-        .then(wrapResponse)
-        .catch((e) => {
-          console.error('[COI]', e);
-          return fetch(fetchRequest);
-        })
+      (async () => {
+        const cache = await caches.open(CACHE_VERSION);
+
+        try {
+          const networkResponse = await fetch(fetchRequest);
+          if (networkResponse.ok) {
+            const wrapped = wrapResponse(networkResponse.clone());
+            await cache.put(request, wrapped.clone());
+            return wrapResponse(networkResponse);
+          }
+        } catch {
+          /* offline — fall through to cache */
+        }
+
+        const cached =
+          (await cache.match(request)) ||
+          (request.mode === 'navigate'
+            ? (await cache.match('./index.html')) || (await cache.match('./'))
+            : null);
+
+        if (cached) {
+          return wrapCached(cached);
+        }
+
+        return fetch(fetchRequest).then(wrapResponse);
+      })()
     );
   });
 } else {
