@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light-default">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EditorPilot — Edit with Confidence. Private writing help on your device.">
+  <title>EditorPilot- Write with Confidence</title>
+  <link rel="icon" href="logo.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <script>window.coi = { coepCredentialless: () => true, quiet: true };</script>
+  <script src="coi-serviceworker.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-left">
+        <a class="brand" href="./" aria-label="EditorPilot home">
+          <img src="logo.png" alt="" class="brand-icon" width="52" height="52">
+          <span class="brand-text">
+            <span class="brand-wordmark">
+              <span class="brand-editor">Editor</span><span class="brand-pilot">Pilot</span>
+            </span>
+            <span class="brand-tagline">Write with Confidence.</span>
+          </span>
+        </a>
+      </div>
+      <div class="header-right">
+        <div class="theme-controls" aria-label="Appearance">
+          <button type="button" class="btn btn-ghost btn-icon theme-toggle" id="btn-dark-toggle" title="Switch to dark mode" aria-pressed="false" aria-label="Toggle dark mode">
+            <svg class="icon-sun-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <g class="icon-moon-group">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" stroke="none"/>
+              </g>
+              <g class="icon-sun-group">
+                <circle cx="12" cy="12" r="5"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </g>
+            </svg>
+          </button>
+          <label class="visually-hidden" for="theme-select">Color theme</label>
+          <select id="theme-select" class="theme-select" title="Color theme">
+            <option value="light-default">Calm Blue</option>
+            <option value="light-soft">Soft Gray</option>
+            <option value="light-warm">Warm Cream</option>
+            <option value="light-sepia">Sepia Read</option>
+            <option value="light-ocean">Ocean Teal</option>
+            <option value="light-forest">Forest Green</option>
+            <option value="light-rose">Rose Blush</option>
+            <option value="light-lavender">Lavender</option>
+            <option value="light-slate">Slate</option>
+          </select>
+        </div>
+        <div class="model-bar" aria-label="Model">
+          <div id="model-status" class="model-status" role="status" aria-live="polite">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-text">Starting…</span>
+          </div>
+          <label class="model-select-label" for="model-select">Change model</label>
+          <select id="model-select" class="model-select" title="Change local model">
+            <option value="auto">Auto (recommended)</option>
+            <option value="Qwen2.5-0.5B-Instruct-q4f32_1-MLC">Qwen 0.5B</option>
+            <option value="Qwen2.5-1.5B-Instruct-q4f32_1-MLC">Qwen 1.5B</option>
+            <option value="gemma-2-9b-it-q4f16_1-MLC" data-lang-only="true">Gemma 2 9B</option>
+          </select>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="btn btn-ghost" id="btn-export">Export</button>
+          <button type="button" class="btn btn-ghost" id="btn-import">Import</button>
+          <button type="button" class="btn btn-ghost" id="btn-setup">Setup</button>
+          <button type="button" class="btn btn-danger-ghost" id="btn-delete-all">Delete All</button>
+          <input type="file" id="import-file" accept=".json,application/json" hidden>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <main class="workspace">
+        <div class="mode-bar" role="toolbar" aria-label="Correction mode">
+          <span class="mode-label">Mode:</span>
+          <div class="mode-group mode-group-style">
+            <button type="button" class="mode-btn active" data-mode="grammar">Grammar</button>
+            <button type="button" class="mode-btn" data-mode="professional">Professional</button>
+            <button type="button" class="mode-btn" data-mode="simple">Simple</button>
+            <button type="button" class="mode-btn" data-mode="shorter">Shorter</button>
+            <button type="button" class="mode-btn" data-mode="friendlier">Friendlier</button>
+            <button type="button" class="mode-btn" data-mode="email">Email</button>
+            <button type="button" class="mode-btn" data-mode="creative">Creative</button>
+            <button type="button" class="mode-btn" data-mode="formal">Formal</button>
+            <button type="button" class="mode-btn" data-mode="casual">Casual</button>
+          </div>
+          <span class="mode-divider" aria-hidden="true"></span>
+          <label class="mode-label" for="language-mode">Language:</label>
+          <select id="language-mode" class="mode-select" title="Correct grammar in another language">
+            <option value="">English (default)</option>
+            <option value="spanish">Spanish</option>
+            <option value="french">French</option>
+            <option value="german">German</option>
+            <option value="portuguese">Portuguese</option>
+            <option value="italian">Italian</option>
+            <option value="dutch">Dutch</option>
+            <option value="chinese">Chinese</option>
+            <option value="japanese">Japanese</option>
+            <option value="korean">Korean</option>
+            <option value="arabic">Arabic</option>
+            <option value="hindi">Hindi</option>
+            <option value="russian">Russian</option>
+            <option value="polish">Polish</option>
+          </select>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-bar-left">
+            <span id="checking-indicator" class="checking-indicator" hidden>checking…</span>
+            <div class="doc-stats" id="doc-stats" aria-live="polite">
+              <span id="stat-words">0 words</span>
+              <span class="stat-sep" aria-hidden="true">·</span>
+              <span id="stat-chars">0 chars</span>
+              <span class="stat-sep" aria-hidden="true">·</span>
+              <span id="stat-read-time">— read</span>
+            </div>
+          </div>
+          <div class="score-strip" id="score-strip" aria-label="Writing scores">
+            <div class="score-pill">
+              <span class="score-label">Human</span>
+              <span class="score-value" id="score-human">—</span>
+            </div>
+            <div class="score-pill">
+              <span class="score-label">Grammar</span>
+              <span class="score-value" id="score-grammar">—</span>
+            </div>
+            <div class="score-pill">
+              <span class="score-label">Clarity</span>
+              <span class="score-value" id="score-clarity">—</span>
+            </div>
+            <div class="score-pill">
+              <span class="score-label">Readability</span>
+              <span class="score-value" id="score-readability">—</span>
+            </div>
+            <div class="score-pill">
+              <span class="score-label">Punctuation</span>
+              <span class="score-value" id="score-punctuation">—</span>
+            </div>
+            <div class="score-pill">
+              <span class="score-label">Model</span>
+              <span class="score-value" id="score-model">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="length-warning" class="length-warning" hidden></div>
+
+        <div class="panels" id="panels">
+          <section class="panel card panel-write">
+            <div class="panel-header panel-header-write">
+              <div class="panel-title-row">
+                <h2>Write Here</h2>
+                <div class="write-toolbar">
+                  <button type="button" class="btn btn-sm" id="btn-clear">Clear</button>
+                  <button type="button" class="btn btn-sm" id="btn-undo">Undo</button>
+                  <button type="button" class="btn btn-ghost btn-sm focus-btn" id="btn-focus-mode" aria-pressed="false">Focus</button>
+                </div>
+              </div>
+              <div class="format-toolbar" role="toolbar" aria-label="Text formatting">
+                <label class="visually-hidden" for="font-family">Font</label>
+                <select id="font-family" class="format-select" title="Font style">
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
+                  <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                  <option value="Arial, Helvetica, sans-serif">Arial</option>
+                  <option value="'Courier New', Courier, monospace">Courier</option>
+                </select>
+                <label class="visually-hidden" for="font-size">Size</label>
+                <select id="font-size" class="format-select" title="Font size">
+                  <option value="14px">Small</option>
+                  <option value="16px" selected>Medium</option>
+                  <option value="18px">Large</option>
+                  <option value="20px">Extra large</option>
+                </select>
+                <button type="button" class="format-btn" id="btn-bold" aria-pressed="false" title="Bold"><strong>B</strong></button>
+                <button type="button" class="format-btn" id="btn-italic" aria-pressed="false" title="Italic"><em>I</em></button>
+              </div>
+            </div>
+            <div class="editor-wrap">
+              <textarea id="plain-text-sync" class="plain-text-sync" aria-hidden="true" tabindex="-1" readonly></textarea>
+              <div id="editor" class="editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Writing area" data-placeholder="Type your notes, emails, or messages here…"></div>
+            </div>
+          </section>
+
+          <section class="panel card panel-side panel-update" id="panel-update" aria-label="Update">
+            <div class="panel-header">
+              <h2>Update</h2>
+              <div class="panel-header-actions">
+                <button type="button" class="btn btn-sm" id="btn-compare" aria-pressed="false">Compare</button>
+                <button type="button" class="btn btn-sm" id="btn-rewrite">Rewrite</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-copy-update">Copy</button>
+              </div>
+            </div>
+            <div id="corrected-output" class="corrected-output" aria-live="polite"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <footer class="site-footer">
+      <nav class="footer-nav" aria-label="Site">
+        <button type="button" class="footer-link" data-legal="privacy">Privacy</button>
+        <span class="footer-sep" aria-hidden="true">·</span>
+        <button type="button" class="footer-link" data-legal="terms">Terms</button>
+        <span class="footer-sep" aria-hidden="true">·</span>
+        <button type="button" class="footer-link" data-legal="gdpr">GDPR</button>
+        <span class="footer-sep" aria-hidden="true">·</span>
+        <button type="button" class="footer-link" data-legal="credits">Credits</button>
+        <span class="footer-sep" aria-hidden="true">·</span>
+        <button type="button" class="footer-link" data-legal="shortcuts">Shortcuts</button>
+      </nav>
+      <p class="footer-copy">© EditorPilot · <a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a> · Carlos I</p>
+    </footer>
+  </div>
+
+  <button type="button" class="donate-fab" id="btn-donate-fab" aria-label="Support EditorPilot" title="Support this project">
+    <span class="donate-fab-icon" aria-hidden="true">♥</span>
+  </button>
+
+  <div id="issue-popup" class="issue-popup" hidden role="dialog" aria-label="Grammar suggestion">
+    <p class="issue-original" id="popup-original"></p>
+    <p class="issue-suggestion" id="popup-suggestion"></p>
+    <p class="issue-explanation" id="popup-explanation"></p>
+    <div class="issue-actions">
+      <button type="button" class="btn btn-primary btn-sm" id="popup-accept">Accept Suggestion</button>
+      <button type="button" class="btn btn-sm" id="popup-ignore">Ignore</button>
+    </div>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 class="modal-title" id="modal-title">Confirm</h2>
+      <p class="modal-message" id="modal-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="modal-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="legal-overlay" class="modal-overlay" hidden>
+    <div class="modal modal-legal" role="dialog" aria-modal="true" aria-labelledby="legal-title">
+      <h2 class="modal-title" id="legal-title">Legal</h2>
+      <div class="legal-body" id="legal-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="legal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rewrite-overlay" class="modal-overlay" hidden>
+    <div class="modal modal-rewrite" role="dialog" aria-modal="true" aria-labelledby="rewrite-title">
+      <h2 class="modal-title" id="rewrite-title">Choose a rewrite</h2>
+      <p class="modal-message" id="rewrite-status">Generating options…</p>
+      <div class="rewrite-options" id="rewrite-options"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="rewrite-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-overlay" class="modal-overlay setup-overlay" hidden>
+    <div class="modal modal-setup" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+      <div class="setup-progress" id="setup-progress">Step 1 of 4</div>
+      <h2 class="modal-title" id="setup-title">Welcome to EditorPilot</h2>
+      <p class="modal-message" id="setup-message">A calm, private writing board that runs on your device.</p>
+      <div class="setup-body" id="setup-body"></div>
+      <div class="modal-actions setup-actions">
+        <button type="button" class="btn" id="setup-close">Close</button>
+        <button type="button" class="btn" id="setup-back" hidden>Back</button>
+        <button type="button" class="btn btn-primary" id="setup-next">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="donation-modal" class="modal-overlay" hidden>
+    <div class="modal-card donation-modal">
+      <div class="modal-header">
+        <h3>Support This Project</h3>
+        <button type="button" class="close-modal" id="close-donation-modal" aria-label="Close">✕</button>
+      </div>
+      <div class="donation-message">
+        ✨ Donation is not required to use EditorPilot — but every contribution helps improve the project.
+      </div>
+      <div class="donation-links">
+        <a href="https://donate.stripe.com/5kAaIF8nD5xS8ve000" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via Stripe</a>
+        <a href="https://www.paypal.com/ncp/payment/CZJHNVHKCFYDA" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via PayPal</a>
+        <a href="https://buymeacoffee.com/carlos.i" target="_blank" rel="noopener noreferrer" class="donation-link">Buy Me a Coffee</a>
+      </div>
+      <div class="footnote">EditorPilot · Created by Carlos I</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,302 +1,1000 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light-default">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="EditorPilot — Edit with Confidence. Private writing help on your device.">
-  <title>EditorPilot- Write with Confidence</title>
-  <link rel="icon" href="logo.png" type="image/png">
-  <link rel="stylesheet" href="style.css">
-  <script>window.coi = { coepCredentialless: () => true, quiet: true };</script>
-  <script src="coi-serviceworker.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="EditorPilot — private AI writing assistant that runs entirely on your device. No data leaves your browser." />
+    <title>EditorPilot · Private AI Writing Assistant</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+    <style>
+        /* ── reset & base ── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --brand: #2563eb;
+            --brand-dark: #1d4ed8;
+            --brand-light: #60a5fa;
+            --brand-glow: rgba(37, 99, 235, 0.25);
+            --bg: #f8fafc;
+            --bg-card: #ffffff;
+            --text: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --radius: 16px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08);
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --max-width: 1200px;
+            --nav-height: 72px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        a {
+            color: var(--brand);
+            text-decoration: none;
+        }
+        a:hover {
+            color: var(--brand-dark);
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ── buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: var(--font);
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--bg-card);
+            color: var(--text);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .btn-primary {
+            background: var(--brand);
+            color: #fff;
+            border-color: var(--brand);
+            box-shadow: 0 4px 14px var(--brand-glow);
+        }
+        .btn-primary:hover {
+            background: var(--brand-dark);
+            border-color: var(--brand-dark);
+            box-shadow: 0 6px 20px var(--brand-glow);
+            color: #fff;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1.5px solid var(--border);
+        }
+        .btn-outline:hover {
+            border-color: var(--brand);
+            color: var(--brand);
+        }
+        .btn-large {
+            padding: 16px 40px;
+            font-size: 1.05rem;
+        }
+
+        /* ── header / nav ── */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            height: var(--nav-height);
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(14px) saturate(1.4);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+            transition: var(--transition);
+        }
+        .navbar .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 100%;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 1.35rem;
+            letter-spacing: -0.02em;
+        }
+        .brand-editor {
+            color: var(--text);
+        }
+        .brand-pilot {
+            color: var(--brand);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+        .nav-links a {
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            position: relative;
+        }
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--brand);
+            border-radius: 2px;
+            transform: scaleX(0);
+            transition: var(--transition);
+        }
+        .nav-links a:hover {
+            color: var(--text);
+        }
+        .nav-links a:hover::after {
+            transform: scaleX(1);
+        }
+
+        .nav-cta .btn {
+            padding: 10px 24px;
+            font-size: 0.85rem;
+        }
+
+        .mobile-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+        }
+        .mobile-toggle span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--text);
+            border-radius: 2px;
+            transition: var(--transition);
+        }
+
+        /* ── hero ── */
+        .hero {
+            padding: 140px 0 80px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -40%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(37, 99, 235, 0.06) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(37, 99, 235, 0.08);
+            color: var(--brand);
+            font-weight: 600;
+            font-size: 0.8rem;
+            padding: 6px 16px;
+            border-radius: 40px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(37, 99, 235, 0.12);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        .hero-badge span {
+            font-size: 1.1rem;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.8rem, 7vw, 4.8rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.08;
+            margin-bottom: 20px;
+        }
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, var(--brand), #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 36px;
+            line-height: 1.7;
+        }
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 56px;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            flex-wrap: wrap;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+        .hero-stats .stat {
+            text-align: center;
+        }
+        .hero-stats .stat-number {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: -0.02em;
+        }
+        .hero-stats .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* ── features ── */
+        .section {
+            padding: 80px 0;
+        }
+        .section-header {
+            text-align: center;
+            max-width: 640px;
+            margin: 0 auto 56px;
+        }
+        .section-header h2 {
+            font-size: clamp(2rem, 4vw, 2.8rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 32px;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            padding: 32px 28px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
+            text-align: center;
+        }
+        .feature-card:hover {
+            transform: translateY(-6px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--brand-light);
+        }
+        .feature-icon {
+            font-size: 2.2rem;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+        .feature-card h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* ── how it works ── */
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            counter-reset: step;
+        }
+        .step {
+            text-align: center;
+            padding: 24px 16px;
+            position: relative;
+        }
+        .step::before {
+            counter-increment: step;
+            content: counter(step);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--brand);
+            color: #fff;
+            font-weight: 800;
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+        }
+        .step h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .step p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* ── modes showcase ── */
+        .modes-showcase {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .mode-tag {
+            background: var(--bg-card);
+            padding: 8px 20px;
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+        .mode-tag:hover {
+            border-color: var(--brand);
+            color: var(--brand);
+            transform: translateY(-2px);
+        }
+        .mode-tag.active {
+            background: var(--brand);
+            color: #fff;
+            border-color: var(--brand);
+        }
+
+        /* ── privacy banner ── */
+        .privacy-banner {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 40px 48px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .privacy-banner .privacy-text {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .privacy-banner .privacy-icon {
+            font-size: 2.4rem;
+        }
+        .privacy-banner h3 {
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        .privacy-banner p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* ── cta ── */
+        .cta-section {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 64px 48px;
+            text-align: center;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+        .cta-section h2 {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+        .cta-section p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 500px;
+            margin: 0 auto 32px;
+        }
+
+        /* ── footer ── */
+        .footer {
+            padding: 40px 0 32px;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+        .footer .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+        .footer-copy {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Floating Donate FAB (bottom-left) ── */
+        .donate-fab {
+            position: fixed;
+            bottom: 28px;
+            left: 28px;
+            z-index: 200;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #f59e0b;
+            color: #fff;
+            border: none;
+            box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .donate-fab:hover {
+            transform: scale(1.08) translateY(-3px);
+            box-shadow: 0 8px 28px rgba(245, 158, 11, 0.5);
+            background: #d97706;
+        }
+        .donate-fab:active {
+            transform: scale(0.95);
+        }
+
+        /* ── Donation Modal ── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-card {
+            background: #fff;
+            border-radius: 24px;
+            max-width: 480px;
+            width: 100%;
+            padding: 32px 28px;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.open .modal-card {
+            transform: translateY(0);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-header h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: color 0.2s;
+            padding: 4px 8px;
+        }
+        .close-modal:hover {
+            color: var(--text);
+        }
+        .donation-message {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 12px;
+            margin: 16px 0 24px;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            border-left: 4px solid var(--brand);
+        }
+        .donation-links {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .donation-link {
+            display: block;
+            padding: 14px 20px;
+            border-radius: 40px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            text-align: center;
+            font-weight: 600;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+        .donation-link:hover {
+            background: var(--brand);
+            color: #fff;
+            border-color: var(--brand);
+            transform: translateY(-2px);
+        }
+        .footnote {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        /* ── responsive ── */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: var(--nav-height);
+                left: 0;
+                right: 0;
+                background: var(--bg-card);
+                flex-direction: column;
+                padding: 24px;
+                gap: 16px;
+                border-bottom: 1px solid var(--border);
+                box-shadow: var(--shadow-md);
+            }
+            .nav-links.open {
+                display: flex;
+            }
+            .mobile-toggle {
+                display: flex;
+            }
+            .hero {
+                padding: 120px 0 60px;
+            }
+            .hero h1 {
+                font-size: 2.4rem;
+            }
+            .hero p {
+                font-size: 1rem;
+            }
+            .hero-stats {
+                gap: 24px;
+            }
+            .privacy-banner {
+                padding: 28px 24px;
+                flex-direction: column;
+                text-align: center;
+            }
+            .privacy-banner .privacy-text {
+                flex-direction: column;
+            }
+            .cta-section {
+                padding: 40px 24px;
+            }
+            .footer .container {
+                flex-direction: column;
+                text-align: center;
+            }
+            .section {
+                padding: 56px 0;
+            }
+            .donate-fab {
+                bottom: 20px;
+                left: 20px;
+                width: 54px;
+                height: 54px;
+                font-size: 1.6rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero h1 {
+                font-size: 1.9rem;
+            }
+            .hero-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            .steps {
+                grid-template-columns: 1fr;
+            }
+            .modal-card {
+                padding: 24px 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-left">
-        <a class="brand" href="./" aria-label="EditorPilot home">
-          <img src="logo.png" alt="" class="brand-icon" width="52" height="52">
-          <span class="brand-text">
-            <span class="brand-wordmark">
-              <span class="brand-editor">Editor</span><span class="brand-pilot">Pilot</span>
-            </span>
-            <span class="brand-tagline">Write with Confidence.</span>
-          </span>
-        </a>
-      </div>
-      <div class="header-right">
-        <div class="theme-controls" aria-label="Appearance">
-          <button type="button" class="btn btn-ghost btn-icon theme-toggle" id="btn-dark-toggle" title="Switch to dark mode" aria-pressed="false" aria-label="Toggle dark mode">
-            <svg class="icon-sun-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <g class="icon-moon-group">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" stroke="none"/>
-              </g>
-              <g class="icon-sun-group">
-                <circle cx="12" cy="12" r="5"/>
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-              </g>
-            </svg>
-          </button>
-          <label class="visually-hidden" for="theme-select">Color theme</label>
-          <select id="theme-select" class="theme-select" title="Color theme">
-            <option value="light-default">Calm Blue</option>
-            <option value="light-soft">Soft Gray</option>
-            <option value="light-warm">Warm Cream</option>
-            <option value="light-sepia">Sepia Read</option>
-            <option value="light-ocean">Ocean Teal</option>
-            <option value="light-forest">Forest Green</option>
-            <option value="light-rose">Rose Blush</option>
-            <option value="light-lavender">Lavender</option>
-            <option value="light-slate">Slate</option>
-          </select>
+
+    <!-- ═══ NAV ═══ -->
+    <header class="navbar" role="banner">
+        <div class="container">
+            <a href="#" class="brand" aria-label="EditorPilot home">
+                <span><span class="brand-editor">Editor</span><span class="brand-pilot">Pilot</span></span>
+            </a>
+
+            <nav class="nav-links" id="nav-links" role="navigation" aria-label="Main">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#privacy">Privacy</a>
+                <a href="/editor" class="nav-cta">
+                    <span class="btn btn-primary">Get Started</span>
+                </a>
+            </nav>
+
+            <button class="mobile-toggle" id="mobile-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span><span></span><span></span>
+                <span class="visually-hidden">Menu</span>
+            </button>
         </div>
-        <div class="model-bar" aria-label="Model">
-          <div id="model-status" class="model-status" role="status" aria-live="polite">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-text">Starting…</span>
-          </div>
-          <label class="model-select-label" for="model-select">Change model</label>
-          <select id="model-select" class="model-select" title="Change local model">
-            <option value="auto">Auto (recommended)</option>
-            <option value="Qwen2.5-0.5B-Instruct-q4f32_1-MLC">Qwen 0.5B</option>
-            <option value="Qwen2.5-1.5B-Instruct-q4f32_1-MLC">Qwen 1.5B</option>
-            <option value="gemma-2-9b-it-q4f16_1-MLC" data-lang-only="true">Gemma 2 9B</option>
-          </select>
-        </div>
-        <div class="header-actions">
-          <button type="button" class="btn btn-ghost" id="btn-export">Export</button>
-          <button type="button" class="btn btn-ghost" id="btn-import">Import</button>
-          <button type="button" class="btn btn-ghost" id="btn-setup">Setup</button>
-          <button type="button" class="btn btn-danger-ghost" id="btn-delete-all">Delete All</button>
-          <input type="file" id="import-file" accept=".json,application/json" hidden>
-        </div>
-      </div>
     </header>
 
-    <div class="main-layout">
-      <main class="workspace">
-        <div class="mode-bar" role="toolbar" aria-label="Correction mode">
-          <span class="mode-label">Mode:</span>
-          <div class="mode-group mode-group-style">
-            <button type="button" class="mode-btn active" data-mode="grammar">Grammar</button>
-            <button type="button" class="mode-btn" data-mode="professional">Professional</button>
-            <button type="button" class="mode-btn" data-mode="simple">Simple</button>
-            <button type="button" class="mode-btn" data-mode="shorter">Shorter</button>
-            <button type="button" class="mode-btn" data-mode="friendlier">Friendlier</button>
-            <button type="button" class="mode-btn" data-mode="email">Email</button>
-            <button type="button" class="mode-btn" data-mode="creative">Creative</button>
-            <button type="button" class="mode-btn" data-mode="formal">Formal</button>
-            <button type="button" class="mode-btn" data-mode="casual">Casual</button>
-          </div>
-          <span class="mode-divider" aria-hidden="true"></span>
-          <label class="mode-label" for="language-mode">Language:</label>
-          <select id="language-mode" class="mode-select" title="Correct grammar in another language">
-            <option value="">English (default)</option>
-            <option value="spanish">Spanish</option>
-            <option value="french">French</option>
-            <option value="german">German</option>
-            <option value="portuguese">Portuguese</option>
-            <option value="italian">Italian</option>
-            <option value="dutch">Dutch</option>
-            <option value="chinese">Chinese</option>
-            <option value="japanese">Japanese</option>
-            <option value="korean">Korean</option>
-            <option value="arabic">Arabic</option>
-            <option value="hindi">Hindi</option>
-            <option value="russian">Russian</option>
-            <option value="polish">Polish</option>
-          </select>
-        </div>
+    <!-- ═══ HERO ═══ -->
+    <section class="hero" id="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <span>🧠</span> Private AI · Runs on your device
+            </div>
 
-        <div class="action-bar">
-          <div class="action-bar-left">
-            <span id="checking-indicator" class="checking-indicator" hidden>checking…</span>
-            <div class="doc-stats" id="doc-stats" aria-live="polite">
-              <span id="stat-words">0 words</span>
-              <span class="stat-sep" aria-hidden="true">·</span>
-              <span id="stat-chars">0 chars</span>
-              <span class="stat-sep" aria-hidden="true">·</span>
-              <span id="stat-read-time">— read</span>
-            </div>
-          </div>
-          <div class="score-strip" id="score-strip" aria-label="Writing scores">
-            <div class="score-pill">
-              <span class="score-label">Human</span>
-              <span class="score-value" id="score-human">—</span>
-            </div>
-            <div class="score-pill">
-              <span class="score-label">Grammar</span>
-              <span class="score-value" id="score-grammar">—</span>
-            </div>
-            <div class="score-pill">
-              <span class="score-label">Clarity</span>
-              <span class="score-value" id="score-clarity">—</span>
-            </div>
-            <div class="score-pill">
-              <span class="score-label">Readability</span>
-              <span class="score-value" id="score-readability">—</span>
-            </div>
-            <div class="score-pill">
-              <span class="score-label">Punctuation</span>
-              <span class="score-value" id="score-punctuation">—</span>
-            </div>
-            <div class="score-pill">
-              <span class="score-label">Model</span>
-              <span class="score-value" id="score-model">—</span>
-            </div>
-          </div>
-        </div>
+            <h1>
+                Your writing,<br />
+                <span class="highlight">Edit with Confidence.</span>
+            </h1>
 
-        <div id="length-warning" class="length-warning" hidden></div>
+            <p>
+                EditorPilot is an AI writing assistant that lives entirely in your browser.
+                No data leaves your device. No accounts. No tracking. Just better writing.
+            </p>
 
-        <div class="panels" id="panels">
-          <section class="panel card panel-write">
-            <div class="panel-header panel-header-write">
-              <div class="panel-title-row">
-                <h2>Write Here</h2>
-                <div class="write-toolbar">
-                  <button type="button" class="btn btn-sm" id="btn-clear">Clear</button>
-                  <button type="button" class="btn btn-sm" id="btn-undo">Undo</button>
-                  <button type="button" class="btn btn-ghost btn-sm focus-btn" id="btn-focus-mode" aria-pressed="false">Focus</button>
+            <div class="hero-actions">
+                <a href="/editor" class="btn btn-primary btn-large">Try EditorPilot &nbsp;→</a>
+                <a href="#features" class="btn btn-outline btn-large">Explore features</a>
+            </div>
+
+            <div class="hero-stats">
+                <div class="stat">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Private & offline</div>
                 </div>
-              </div>
-              <div class="format-toolbar" role="toolbar" aria-label="Text formatting">
-                <label class="visually-hidden" for="font-family">Font</label>
-                <select id="font-family" class="format-select" title="Font style">
-                  <option value="Georgia, serif">Georgia</option>
-                  <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
-                  <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                  <option value="Arial, Helvetica, sans-serif">Arial</option>
-                  <option value="'Courier New', Courier, monospace">Courier</option>
-                </select>
-                <label class="visually-hidden" for="font-size">Size</label>
-                <select id="font-size" class="format-select" title="Font size">
-                  <option value="14px">Small</option>
-                  <option value="16px" selected>Medium</option>
-                  <option value="18px">Large</option>
-                  <option value="20px">Extra large</option>
-                </select>
-                <button type="button" class="format-btn" id="btn-bold" aria-pressed="false" title="Bold"><strong>B</strong></button>
-                <button type="button" class="format-btn" id="btn-italic" aria-pressed="false" title="Italic"><em>I</em></button>
-              </div>
+                <div class="stat">
+                    <div class="stat-number">10+</div>
+                    <div class="stat-label">Writing modes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">Languages supported</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Data ever stored</div>
+                </div>
             </div>
-            <div class="editor-wrap">
-              <textarea id="plain-text-sync" class="plain-text-sync" aria-hidden="true" tabindex="-1" readonly></textarea>
-              <div id="editor" class="editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Writing area" data-placeholder="Type your notes, emails, or messages here…"></div>
-            </div>
-          </section>
-
-          <section class="panel card panel-side panel-update" id="panel-update" aria-label="Update">
-            <div class="panel-header">
-              <h2>Update</h2>
-              <div class="panel-header-actions">
-                <button type="button" class="btn btn-sm" id="btn-compare" aria-pressed="false">Compare</button>
-                <button type="button" class="btn btn-sm" id="btn-rewrite">Rewrite</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-copy-update">Copy</button>
-              </div>
-            </div>
-            <div id="corrected-output" class="corrected-output" aria-live="polite"></div>
-          </section>
         </div>
-      </main>
-    </div>
+    </section>
 
-    <footer class="site-footer">
-      <nav class="footer-nav" aria-label="Site">
-        <button type="button" class="footer-link" data-legal="privacy">Privacy</button>
-        <span class="footer-sep" aria-hidden="true">·</span>
-        <button type="button" class="footer-link" data-legal="terms">Terms</button>
-        <span class="footer-sep" aria-hidden="true">·</span>
-        <button type="button" class="footer-link" data-legal="gdpr">GDPR</button>
-        <span class="footer-sep" aria-hidden="true">·</span>
-        <button type="button" class="footer-link" data-legal="credits">Credits</button>
-        <span class="footer-sep" aria-hidden="true">·</span>
-        <button type="button" class="footer-link" data-legal="shortcuts">Shortcuts</button>
-      </nav>
-      <p class="footer-copy">© EditorPilot · <a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a> · Carlos I</p>
+    <!-- ═══ FEATURES ═══ -->
+    <section class="section" id="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Everything you need to write with confidence</h2>
+                <p>From quick grammar fixes to full rewrites — all running locally on your machine.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h3>Grammar & Punctuation</h3>
+                    <p>Catch typos, grammatical errors, and punctuation mistakes in real time with local AI.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>10+ Writing Modes</h3>
+                    <p>Switch between Grammar, Professional, Simple, Shorter, Friendlier, Email, Academic, and more.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌍</div>
+                    <h3>Multilingual Support</h3>
+                    <p>Write in English, Spanish, French, German, Portuguese, Italian, Dutch, Chinese, Japanese, and more.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Zero Data Collection</h3>
+                    <p>Everything stays on your device. No servers, no cloud, no third parties. Your words are yours.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Instant Rewrites</h3>
+                    <p>Highlight any text and get alternative phrasings with a single click. Iterate until it sounds right.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🧘</div>
+                    <h3>Calm, Focused Workspace</h3>
+                    <p>A distraction-free interface with adjustable fonts, themes, and a focus mode for deep writing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section class="section" id="how-it-works" style="background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+        <div class="container">
+            <div class="section-header">
+                <h2>How EditorPilot works</h2>
+                <p>Three simple steps to better writing — no setup, no sign-up.</p>
+            </div>
+
+            <div class="steps">
+                <div class="step">
+                    <h3>Write or paste</h3>
+                    <p>Type your text directly into the editor or paste from anywhere.</p>
+                </div>
+                <div class="step">
+                    <h3>Pick your mode</h3>
+                    <p>Choose from 10+ writing styles to match your tone and intent.</p>
+                </div>
+                <div class="step">
+                    <h3>Get suggestions</h3>
+                    <p>See inline corrections and rewrite options — accept or ignore as you like.</p>
+                </div>
+            </div>
+
+            <div class="modes-showcase">
+                <span class="mode-tag active">Grammar</span>
+                <span class="mode-tag">Professional</span>
+                <span class="mode-tag">Simple</span>
+                <span class="mode-tag">Shorter</span>
+                <span class="mode-tag">Friendlier</span>
+                <span class="mode-tag">Email</span>
+                <span class="mode-tag">Academic</span>
+                <span class="mode-tag">Creative</span>
+                <span class="mode-tag">Formal</span>
+                <span class="mode-tag">Casual</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ PRIVACY ═══ -->
+    <section class="section" id="privacy">
+        <div class="container">
+            <div class="privacy-banner">
+                <div class="privacy-text">
+                    <span class="privacy-icon">🛡️</span>
+                    <div>
+                        <h3>Your data stays with you — always.</h3>
+                        <p>EditorPilot runs entirely in your browser using local AI models. Nothing you write is ever sent to a server, stored, or shared. No accounts, no tracking, no surprises.</p>
+                    </div>
+                </div>
+                <a href="/editor" class="btn btn-primary">Start writing privately</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ CTA ═══ -->
+    <section class="section" id="cta">
+        <div class="container">
+            <div class="cta-section">
+                <h2>Ready to write better?</h2>
+                <p>Open EditorPilot in your browser and start improving your writing immediately. No installation, no registration, no cost.</p>
+                <a href="/editor" class="btn btn-primary btn-large">Launch EditorPilot &nbsp;→</a>
+                <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted);">
+                    ✨ Completely free · Runs offline
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="footer" role="contentinfo">
+        <div class="container">
+            <div class="footer-copy">
+                © 2026 <strong>EditorPilot</strong> · Carlos I
+            </div>
+        </div>
     </footer>
-  </div>
 
-  <button type="button" class="donate-fab" id="btn-donate-fab" aria-label="Support EditorPilot" title="Support this project">
-    <span class="donate-fab-icon" aria-hidden="true">♥</span>
-  </button>
+    <!-- ═══ FLOATING DONATE BUTTON (bottom-left) ═══ -->
+    <button type="button" class="donate-fab" id="btn-donate-fab" aria-label="Support EditorPilot" title="Support this project">
+        <span aria-hidden="true">♥</span>
+    </button>
 
-  <div id="issue-popup" class="issue-popup" hidden role="dialog" aria-label="Grammar suggestion">
-    <p class="issue-original" id="popup-original"></p>
-    <p class="issue-suggestion" id="popup-suggestion"></p>
-    <p class="issue-explanation" id="popup-explanation"></p>
-    <div class="issue-actions">
-      <button type="button" class="btn btn-primary btn-sm" id="popup-accept">Accept Suggestion</button>
-      <button type="button" class="btn btn-sm" id="popup-ignore">Ignore</button>
+    <!-- ═══ DONATION MODAL ═══ -->
+    <div id="donation-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="donation-title">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="donation-title">Support This Project</h3>
+                <button type="button" class="close-modal" id="close-donation-modal" aria-label="Close">✕</button>
+            </div>
+            <div class="donation-message">
+                ✨ Donation is not required to use EditorPilot — but every contribution helps improve the project.
+            </div>
+            <div class="donation-links">
+                <a href="https://donate.stripe.com/5kAaIF8nD5xS8ve000" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via Stripe</a>
+                <a href="https://www.paypal.com/ncp/payment/CZJHNVHKCFYDA" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via PayPal</a>
+                <a href="https://buymeacoffee.com/carlos.i" target="_blank" rel="noopener noreferrer" class="donation-link">Buy Me a Coffee</a>
+            </div>
+            <div class="footnote">EditorPilot · Created by Carlos I</div>
+        </div>
     </div>
-  </div>
 
-  <div id="modal-overlay" class="modal-overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h2 class="modal-title" id="modal-title">Confirm</h2>
-      <p class="modal-message" id="modal-message"></p>
-      <div class="modal-actions">
-        <button type="button" class="btn" id="modal-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary" id="modal-confirm">Confirm</button>
-      </div>
-    </div>
-  </div>
+    <!-- ═══ JAVASCRIPT ═══ -->
+    <script>
+        // ── Mobile nav toggle ──
+        const toggle = document.getElementById('mobile-toggle');
+        const navLinks = document.getElementById('nav-links');
 
-  <div id="legal-overlay" class="modal-overlay" hidden>
-    <div class="modal modal-legal" role="dialog" aria-modal="true" aria-labelledby="legal-title">
-      <h2 class="modal-title" id="legal-title">Legal</h2>
-      <div class="legal-body" id="legal-body"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-primary" id="legal-close">Close</button>
-      </div>
-    </div>
-  </div>
+        toggle.addEventListener('click', () => {
+            const open = navLinks.classList.toggle('open');
+            toggle.setAttribute('aria-expanded', open);
+        });
 
-  <div id="rewrite-overlay" class="modal-overlay" hidden>
-    <div class="modal modal-rewrite" role="dialog" aria-modal="true" aria-labelledby="rewrite-title">
-      <h2 class="modal-title" id="rewrite-title">Choose a rewrite</h2>
-      <p class="modal-message" id="rewrite-status">Generating options…</p>
-      <div class="rewrite-options" id="rewrite-options"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn" id="rewrite-cancel">Cancel</button>
-      </div>
-    </div>
-  </div>
+        // Close nav on link click (mobile)
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('open');
+                toggle.setAttribute('aria-expanded', 'false');
+            });
+        });
 
-  <div id="setup-overlay" class="modal-overlay setup-overlay" hidden>
-    <div class="modal modal-setup" role="dialog" aria-modal="true" aria-labelledby="setup-title">
-      <div class="setup-progress" id="setup-progress">Step 1 of 4</div>
-      <h2 class="modal-title" id="setup-title">Welcome to EditorPilot</h2>
-      <p class="modal-message" id="setup-message">A calm, private writing board that runs on your device.</p>
-      <div class="setup-body" id="setup-body"></div>
-      <div class="modal-actions setup-actions">
-        <button type="button" class="btn" id="setup-close">Close</button>
-        <button type="button" class="btn" id="setup-back" hidden>Back</button>
-        <button type="button" class="btn btn-primary" id="setup-next">Continue</button>
-      </div>
-    </div>
-  </div>
+        // ── Smooth anchor scroll (only for internal # links) ──
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    e.preventDefault();
+                    const offset = 80;
+                    const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({ top, behavior: 'smooth' });
+                }
+            });
+        });
 
-  <div id="donation-modal" class="modal-overlay" hidden>
-    <div class="modal-card donation-modal">
-      <div class="modal-header">
-        <h3>Support This Project</h3>
-        <button type="button" class="close-modal" id="close-donation-modal" aria-label="Close">✕</button>
-      </div>
-      <div class="donation-message">
-        ✨ Donation is not required to use EditorPilot — but every contribution helps improve the project.
-      </div>
-      <div class="donation-links">
-        <a href="https://donate.stripe.com/5kAaIF8nD5xS8ve000" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via Stripe</a>
-        <a href="https://www.paypal.com/ncp/payment/CZJHNVHKCFYDA" target="_blank" rel="noopener noreferrer" class="donation-link">Donate via PayPal</a>
-        <a href="https://buymeacoffee.com/carlos.i" target="_blank" rel="noopener noreferrer" class="donation-link">Buy Me a Coffee</a>
-      </div>
-      <div class="footnote">EditorPilot · Created by Carlos I</div>
-    </div>
-  </div>
+        // ── Mode tags click ──
+        document.querySelectorAll('.mode-tag').forEach(tag => {
+            tag.addEventListener('click', function() {
+                document.querySelectorAll('.mode-tag').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
 
-  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+        // ── Donation Modal logic ──
+        const fab = document.getElementById('btn-donate-fab');
+        const modal = document.getElementById('donation-modal');
+        const closeBtn = document.getElementById('close-donation-modal');
 
-  <script type="module" src="app.js"></script>
+        function openModal() {
+            modal.classList.add('open');
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+        }
+
+        fab.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+
+        // Close on overlay click (outside card)
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Close with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('open')) {
+                closeModal();
+            }
+        });
+
+        // ── Stats animation ──
+        if ('IntersectionObserver' in window) {
+            const stats = document.querySelectorAll('.stat-number');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, { threshold: 0.5 });
+
+            stats.forEach(stat => {
+                stat.style.opacity = '0';
+                stat.style.transform = 'translateY(12px)';
+                stat.style.transition = '0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+                observer.observe(stat);
+            });
+        }
+
+        console.log('✈️ EditorPilot — Private AI Writing Assistant');
+        console.log('🔒 100% local · No data ever leaves your device.');
+    </script>
+
 </body>
 </html>
