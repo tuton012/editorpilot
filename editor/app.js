@@ -547,40 +547,31 @@ async function openRewriteModal() {
       return;
     }
 
-    rewriteStatus.textContent = 'Pick a style to apply to your draft and Update panel.';
+    rewriteStatus.textContent = 'Copy a style — your draft stays unchanged.';
     rewriteOptions.innerHTML = variants
       .map(
         (v, i) => `
-      <button type="button" class="rewrite-option" data-idx="${i}">
-        <span class="rewrite-option-label">${escapeHtml(v.label)}</span>
-        ${escapeHtml(v.text)}
-      </button>`
+      <div class="rewrite-option" data-idx="${i}">
+        <div class="rewrite-option-header">
+          <span class="rewrite-option-label">${escapeHtml(v.label)}</span>
+          <button type="button" class="btn btn-ghost btn-sm rewrite-option-copy">Copy</button>
+        </div>
+        <div class="rewrite-option-body">${escapeHtml(v.text)}</div>
+      </div>`
       )
       .join('');
 
-    rewriteOptions.querySelectorAll('.rewrite-option').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.dataset.idx);
-        applyRewriteChoice(variants[idx].text);
+    rewriteOptions.querySelectorAll('.rewrite-option').forEach((card) => {
+      const idx = Number(card.dataset.idx);
+      card.querySelector('.rewrite-option-copy').addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyPanelText(variants[idx].text, 'rewrite');
       });
     });
   } catch (err) {
     console.error('[ERROR]', err);
     rewriteStatus.textContent = 'Rewrite failed — try again.';
   }
-}
-
-function applyRewriteChoice(text) {
-  if (!text) return;
-  pushUndoSnapshot();
-  setEditorPlainText(text);
-  correctedText = text;
-  updateNewUpdatePanel(text);
-  updateScores(text);
-  closeRewriteModal();
-  scheduleDebouncedAI();
-  scheduleAutosave();
-  showToast('Rewrite applied');
 }
 
 function showLegalModal(key) {

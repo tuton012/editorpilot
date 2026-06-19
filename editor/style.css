@@ -1227,13 +1227,17 @@ html[data-theme="dark"] .app.focus-mode::after {
 
 .editor::-webkit-scrollbar,
 .corrected-output::-webkit-scrollbar,
-.sidebar::-webkit-scrollbar {
+.sidebar::-webkit-scrollbar,
+.rewrite-options::-webkit-scrollbar,
+.rewrite-option-body::-webkit-scrollbar {
   width: 6px;
 }
 
 .editor::-webkit-scrollbar-thumb,
 .corrected-output::-webkit-scrollbar-thumb,
-.sidebar::-webkit-scrollbar-thumb {
+.sidebar::-webkit-scrollbar-thumb,
+.rewrite-options::-webkit-scrollbar-thumb,
+.rewrite-option-body::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
   border-radius: 3px;
 }
@@ -1428,7 +1432,9 @@ html[data-theme="dark"] .app.focus-mode::after {
 
 .editor::-webkit-scrollbar-thumb:hover,
 .corrected-output::-webkit-scrollbar-thumb:hover,
-.sidebar::-webkit-scrollbar-thumb:hover {
+.sidebar::-webkit-scrollbar-thumb:hover,
+.rewrite-options::-webkit-scrollbar-thumb:hover,
+.rewrite-option-body::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
 
@@ -1627,33 +1633,47 @@ html[data-theme="dark"] .app.focus-mode::after {
 }
 
 .rewrite-option {
-  display: block;
-  width: 100%;
-  padding: 14px 16px;
-  text-align: left;
-  font-family: inherit;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--surface-muted);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  white-space: pre-wrap;
+  overflow: hidden;
+  transition: border-color 0.15s;
 }
 
 .rewrite-option:hover {
   border-color: var(--accent);
-  background: var(--accent-soft);
+}
+
+.rewrite-option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
 }
 
 .rewrite-option-label {
-  display: block;
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-light);
-  margin-bottom: 6px;
+}
+
+.rewrite-option-body {
+  flex: 1;
+  min-height: 72px;
+  max-height: 180px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
