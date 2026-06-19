@@ -3,10 +3,9 @@
  * Requires cross-origin isolation (COOP/COEP).
  */
 
-import sqlite3InitModule from 'https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.51.2-build8/dist/index.mjs';
+import sqlite3InitModule from './vendor/sqlite-wasm/index.mjs';
 
-const WASM_VERSION = '3.51.2-build8';
-const WASM_BASE = `https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@${WASM_VERSION}/dist/`;
+const WASM_BASE = new URL('./vendor/sqlite-wasm/', import.meta.url).href;
 const DB_FILE = '/calmworkspace.db';
 
 let db = null;
