@@ -571,8 +571,8 @@ function setReviewMode(mode) {
   refreshUpdatePanel();
 }
 
-function syncReviewModeUI() {
-  const incremental = reviewMode === REVIEW_MODES.INCREMENTAL;
+function syncReviewModeUI(mode = reviewMode) {
+  const incremental = mode === REVIEW_MODES.INCREMENTAL;
   document.getElementById('adv-review-incremental')?.classList.toggle('selected', incremental);
   document.getElementById('adv-review-whole')?.classList.toggle('selected', !incremental);
   document.getElementById('setup-review-incremental')?.classList.toggle('selected', incremental);
@@ -799,6 +799,18 @@ function closeWhatsNew() {
   }
 }
 
+function showOverlay(el) {
+  if (!el) return;
+  el.hidden = false;
+  el.removeAttribute('hidden');
+}
+
+function hideOverlay(el) {
+  if (!el) return;
+  el.hidden = true;
+  el.setAttribute('hidden', '');
+}
+
 function renderAdvancedTemplateList() {
   const list = document.getElementById('advanced-template-list');
   if (!list) return;
@@ -831,7 +843,7 @@ function renderAdvancedTemplateList() {
       scheduleDebouncedAI();
       scheduleAutosave();
       showToast(`Template inserted: ${tpl.name}`);
-      advancedOverlay.hidden = true;
+      hideOverlay(advancedOverlay);
     });
   });
 
@@ -845,12 +857,28 @@ function renderAdvancedTemplateList() {
 }
 
 function openAdvancedModal() {
-  document.getElementById('adv-custom-rules').value = advancedSettings.customRules.join('\n');
-  document.getElementById('adv-dictionary').value = advancedSettings.personalDictionary.join('\n');
-  document.getElementById('adv-blocked').value = advancedSettings.blockedPhrases.join('\n');
-  syncReviewModeUI();
-  renderAdvancedTemplateList();
-  advancedOverlay.hidden = false;
+  if (!advancedOverlay) {
+    console.error('[ADVANCED] Modal overlay not found');
+    return;
+  }
+
+  try {
+    const rules = document.getElementById('adv-custom-rules');
+    const dictionary = document.getElementById('adv-dictionary');
+    const blocked = document.getElementById('adv-blocked');
+
+    if (rules) rules.value = (advancedSettings.customRules || []).join('\n');
+    if (dictionary) dictionary.value = (advancedSettings.personalDictionary || []).join('\n');
+    if (blocked) blocked.value = (advancedSettings.blockedPhrases || []).join('\n');
+
+    syncReviewModeUI();
+    switchAdvancedTab('templates');
+    renderAdvancedTemplateList();
+    showOverlay(advancedOverlay);
+  } catch (err) {
+    console.error('[ADVANCED] Could not open settings', err);
+    showToast('Could not open Advanced settings');
+  }
 }
 
 async function saveAdvancedModal() {
@@ -859,7 +887,7 @@ async function saveAdvancedModal() {
   advancedSettings.blockedPhrases = parseLines(document.getElementById('adv-blocked').value);
   await saveAdvancedSettings(setPreference, advancedSettings);
   syncWritingContextToAI();
-  advancedOverlay.hidden = true;
+  hideOverlay(advancedOverlay);
   showToast('Advanced settings saved');
   scheduleDebouncedAI();
 }
@@ -878,9 +906,16 @@ function switchAdvancedTab(tabId) {
 }
 
 function bindAdvancedModal() {
-  btnAdvanced?.addEventListener('click', openAdvancedModal);
+  btnAdvanced?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openAdvancedModal();
+  });
   document.getElementById('advanced-close')?.addEventListener('click', () => {
-    advancedOverlay.hidden = true;
+    hideOverlay(advancedOverlay);
+  });
+  advancedOverlay?.addEventListener('click', (e) => {
+    if (e.target === advancedOverlay) hideOverlay(advancedOverlay);
   });
   document.getElementById('advanced-save')?.addEventListener('click', () => {
     void saveAdvancedModal();
@@ -1859,7 +1894,7 @@ setModelChangeCallback((modelId) => {
 // ---- Setup wizard ----
 
 let setupStep = 0;
-const SETUP_STEPS = 7;
+const SETUP_STEPS = 6;
 let setupMandatory = false;
 let setupRequirementsPassed = false;
 let setupModelLoading = false;
@@ -1889,6 +1924,11 @@ function updateSetupActions() {
 
   setupNext.disabled = onRequirementsStep && !setupRequirementsPassed;
   setupNext.textContent = setupStep === SETUP_STEPS - 1 ? 'Get started' : 'Continue';
+
+  if (btnAdvanced) {
+    btnAdvanced.disabled = setupMandatory;
+    btnAdvanced.setAttribute('aria-disabled', setupMandatory ? 'true' : 'false');
+  }
 }
 
 function renderDeviceSpecs(specs) {
@@ -2102,7 +2142,25 @@ function renderSetupStep() {
     setupTitle.textContent = 'Welcome to EditorPilot';
     setupMessage.textContent =
       'EditorPilot is an AI writing assistant that lives entirely in your browser. No data leaves your device. No accounts. No tracking. Just better writing.';
-    setupBody.innerHTML = '';
+    setupBody.innerHTML = `
+      <p class="setup-field-label">How should AI updates appear?</p>
+      <div class="setup-options">
+        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL ? 'selected' : ''}" id="setup-review-incremental" data-value="incremental">
+          <div><strong>Review each change</strong><span>Accept or reject suggestions one at a time</span></div>
+        </button>
+        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.WHOLE ? 'selected' : ''}" id="setup-review-whole" data-value="whole">
+          <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>
+        </button>
+      </div>
+      <p class="setup-hint">You can change this later in Advanced settings (gear icon in the header).</p>`;
+    document.getElementById('setup-review-incremental')?.addEventListener('click', () => {
+      setupDraft.reviewMode = REVIEW_MODES.INCREMENTAL;
+      syncReviewModeUI(setupDraft.reviewMode);
+    });
+    document.getElementById('setup-review-whole')?.addEventListener('click', () => {
+      setupDraft.reviewMode = REVIEW_MODES.WHOLE;
+      syncReviewModeUI(setupDraft.reviewMode);
+    });
     return;
   }
 
@@ -2168,31 +2226,6 @@ function renderSetupStep() {
   }
 
   if (setupStep === 4) {
-    setupTitle.textContent = 'How should updates appear?';
-    setupMessage.textContent =
-      'Choose whether to review AI suggestions one at a time or see the full corrected text.';
-    setupBody.innerHTML = `
-      <div class="setup-options">
-        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL ? 'selected' : ''}" id="setup-review-incremental" data-value="incremental">
-          <div><strong>Review each change</strong><span>Accept or reject suggestions one at a time</span></div>
-        </button>
-        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.WHOLE ? 'selected' : ''}" id="setup-review-whole" data-value="whole">
-          <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>
-        </button>
-      </div>
-      <p class="setup-hint">You can change this anytime in Advanced settings (gear icon in the header).</p>`;
-    document.getElementById('setup-review-incremental')?.addEventListener('click', () => {
-      setupDraft.reviewMode = REVIEW_MODES.INCREMENTAL;
-      syncReviewModeUI();
-    });
-    document.getElementById('setup-review-whole')?.addEventListener('click', () => {
-      setupDraft.reviewMode = REVIEW_MODES.WHOLE;
-      syncReviewModeUI();
-    });
-    return;
-  }
-
-  if (setupStep === 5) {
     setupTitle.textContent = 'Choose your look';
     setupMessage.textContent = 'Pick colors that are easy on your eyes. You can change these anytime.';
     setupBody.innerHTML = `
@@ -2242,7 +2275,7 @@ function renderSetupStep() {
     return;
   }
 
-  if (setupStep === 6) {
+  if (setupStep === 5) {
     setupTitle.textContent = 'Quick guide';
     setupMessage.textContent = 'A few things to know about your workspace.';
     setupBody.innerHTML = `
@@ -2257,7 +2290,7 @@ function renderSetupStep() {
       </ul>`;
   }
 
-  if (setupStep >= 5) {
+  if (setupStep >= 4) {
     applySetupPreview();
   }
 }
@@ -2276,12 +2309,6 @@ function collectSetupStep() {
     setupDraft.mode = mode;
   }
   if (setupStep === 4) {
-    setupDraft.reviewMode =
-      setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL
-        ? REVIEW_MODES.INCREMENTAL
-        : REVIEW_MODES.WHOLE;
-  }
-  if (setupStep === 5) {
     setupDraft.colorTheme = document.getElementById('setup-theme')?.value || 'light-default';
   }
 }
@@ -2550,7 +2577,7 @@ function bindEvents() {
       if (focusMode) setFocusMode(false);
       if (!rewriteOverlay.hidden) closeRewriteModal();
       if (!donationModal.hidden) donationModal.hidden = true;
-      if (!advancedOverlay.hidden) advancedOverlay.hidden = true;
+      if (advancedOverlay && !advancedOverlay.hidden) hideOverlay(advancedOverlay);
       if (!whatsNewOverlay.hidden) closeWhatsNew();
       if (!legalOverlay.hidden) legalOverlay.hidden = true;
       if (setupMandatory && !setupOverlay.hidden) return;

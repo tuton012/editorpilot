@@ -1,9 +1,7 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "whatsNew": [
-    "Review each AI change with Accept / Reject — or keep Replace whole text mode",
-    "Advanced settings (gear icon): templates, custom rules, personal dictionary, blocked phrases",
-    "Choose your review mode during setup or anytime in Advanced"
-    
+    "Advanced settings now uses a gear icon and opens reliably",
+    "Choose Review each change or Replace whole text on the welcome setup step"
   ]
 }

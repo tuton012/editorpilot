@@ -1372,6 +1372,10 @@ html[data-theme="dark"] .app.focus-mode::after {
   display: none;
 }
 
+#advanced-overlay {
+  z-index: 2500;
+}
+
 .modal {
   width: 100%;
   max-width: 440px;
@@ -2029,6 +2033,11 @@ html[data-theme="dark"] .app.focus-mode::after {
   padding: 8px;
   min-width: 36px;
   justify-content: center;
+}
+
+#btn-advanced:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .footer-site-link {
