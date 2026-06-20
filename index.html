@@ -615,6 +615,43 @@
             margin-top: 8px;
         }
 
+        /* ── requirements ── */
+        .requirements-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        .requirement-card {
+            background: var(--bg-card);
+            padding: 28px 24px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+        .requirement-card h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .requirement-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .requirement-note {
+            margin-top: 28px;
+            text-align: center;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            padding: 16px 20px;
+            background: rgba(37, 99, 235, 0.06);
+            border: 1px solid rgba(37, 99, 235, 0.12);
+            border-radius: 12px;
+        }
+
         /* ── responsive ── */
         @media (max-width: 1024px) {
             .features-grid {
@@ -691,6 +728,9 @@
             .steps {
                 grid-template-columns: 1fr;
             }
+            .requirements-grid {
+                grid-template-columns: 1fr;
+            }
             .modal-card {
                 padding: 24px 16px;
             }
@@ -711,6 +751,7 @@
                 <a href="#features">Features</a>
                 <a href="#how-it-works">How It Works</a>
                 <a href="#privacy">Privacy</a>
+                <a href="#requirements">Requirements</a>
                 <a href="/editor" class="nav-cta">
                     <span class="btn btn-primary">Get Started</span>
                 </a>
@@ -860,6 +901,39 @@
                 </div>
                 <a href="/editor" class="btn btn-primary">Start writing privately</a>
             </div>
+        </div>
+    </section>
+
+    <!-- ═══ REQUIREMENTS ═══ -->
+    <section class="section" id="requirements" style="background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+        <div class="container">
+            <div class="section-header">
+                <h2>EditorPilot requirements</h2>
+                <p>Everything you need before you start — no account, no subscription, no hidden costs.</p>
+            </div>
+
+            <div class="requirements-grid">
+                <div class="requirement-card">
+                    <h3><span aria-hidden="true">🌐</span> Modern browser</h3>
+                    <p>Use Chrome, Edge, Firefox 111+, or Safari 16.4+ with WebGPU enabled. EditorPilot runs entirely in your browser — no install required to get started.</p>
+                </div>
+                <div class="requirement-card">
+                    <h3><span aria-hidden="true">📥</span> First-time download</h3>
+                    <p>An internet connection is needed on your first visit so the local AI model can download and cache in your browser. After that, suggestions run on your device.</p>
+                </div>
+                <div class="requirement-card">
+                    <h3><span aria-hidden="true">📴</span> Offline use</h3>
+                    <p>To write offline, install EditorPilot from your browser and wait until the model finishes downloading before you disconnect.</p>
+                </div>
+                <div class="requirement-card">
+                    <h3><span aria-hidden="true">🔐</span> Secure connection</h3>
+                    <p>EditorPilot is served over HTTPS so local storage and on-device AI can run safely. Your writing never leaves your machine.</p>
+                </div>
+            </div>
+
+            <p class="requirement-note">
+                ✨ Donation is not required to use EditorPilot — but every contribution helps improve the project.
+            </p>
         </div>
     </section>
 

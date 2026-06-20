@@ -14,16 +14,21 @@ import {
   switchModel,
   getSelectedModelPref,
   setSelectedModelPref,
+  setModelChangeCallback,
   getActiveModelId,
   isSmallTierModel,
+  isMultilingualCapableModel,
   isAIReady,
   detectLanguageHeuristic,
+  GEMMA_2B_MODEL_ID,
   GEMMA_MODEL_ID,
   APP_NAME,
   MIN_TEXT_LENGTH,
   MAX_CORRECTION_LENGTH,
   MAX_HIGHLIGHT_LENGTH,
   checkWebGPUSupport,
+  checkEditorRequirements,
+  MODEL_CATALOG,
   MODE_LABELS,
   LANGUAGE_MODES,
   STYLE_MODES,
@@ -181,7 +186,7 @@ const legalTitle = document.getElementById('legal-title');
 const legalBody = document.getElementById('legal-body');
 const legalClose = document.getElementById('legal-close');
 const donationModal = document.getElementById('donation-modal');
-const btnDonateFab = document.getElementById('btn-donate-fab');
+const btnDonate = document.getElementById('btn-donate');
 const closeDonationModal = document.getElementById('close-donation-modal');
 
 let undoInputTimer = null;
@@ -600,7 +605,7 @@ function setOutputLanguage(lang) {
   }
 
   if (isSmallTierModel(getActiveModelId()) && !SMALL_MODEL_LANGUAGES.has(lang)) {
-    showToast('That language needs Gemma 2 9B or a higher tier model');
+    showToast('That language needs Gemma 2 2B or Gemma 2 9B');
     outputLanguageSelect.value = outputLanguage;
     return;
   }
@@ -641,25 +646,26 @@ function onCorrectionProgress({ phase, batch, total }) {
 function syncModelForLanguage() {
   syncOutputLanguageOptions();
 
-  const needsGemma = needsMultilingualModel();
+  const needsMultilingual = needsMultilingualModel();
 
   modelSelect.querySelectorAll('option').forEach((opt) => {
-    const isGemma = opt.value === GEMMA_MODEL_ID;
-    if (needsGemma) {
-      opt.hidden = !isGemma;
-      opt.disabled = !isGemma;
+    if (!opt.value || opt.value === 'auto') return;
+    const isMultilingual = isMultilingualCapableModel(opt.value);
+    if (needsMultilingual) {
+      opt.hidden = !isMultilingual;
+      opt.disabled = !isMultilingual;
     } else {
       opt.hidden = false;
       opt.disabled = false;
     }
   });
 
-  if (needsGemma && modelSelect.value !== GEMMA_MODEL_ID) {
-    modelSelect.value = GEMMA_MODEL_ID;
-    setSelectedModelPref(GEMMA_MODEL_ID);
-    switchModel(GEMMA_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    setPreference('selected_model', GEMMA_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    showToast('This language uses Gemma 2 9B');
+  if (needsMultilingual && !isMultilingualCapableModel(modelSelect.value)) {
+    modelSelect.value = GEMMA_2B_MODEL_ID;
+    setSelectedModelPref(GEMMA_2B_MODEL_ID);
+    switchModel(GEMMA_2B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    setPreference('selected_model', GEMMA_2B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    showToast('This language uses Gemma 2 2B or Gemma 2 9B');
   }
 }
 
@@ -1114,7 +1120,12 @@ async function runCorrectionOnly(text, requestId) {
     updateScores(text);
   } catch (err) {
     console.error('[ERROR]', err);
-    showToast('Could not update — try again');
+    const msg = String(err?.message || err || '').toLowerCase();
+    if (msg.includes('device was lost') || msg.includes('disposed') || msg.includes('modelnotloaded')) {
+      showToast('GPU ran out of memory — switch to Qwen 0.5B in the header');
+    } else {
+      showToast('Could not update — try again');
+    }
   } finally {
     aiTaskRunning = false;
     setChecking(false);
@@ -1386,7 +1397,7 @@ async function deleteAllLocalData() {
 
 // ---- Model status UI ----
 
-setStatusCallback(({ text, state, progress }) => {
+function handleModelStatus({ text, state, progress }) {
   let label = text;
 
   if (state === 'loading') {
@@ -1400,6 +1411,8 @@ setStatusCallback(({ text, state, progress }) => {
     }
   } else if (state === 'ready') {
     label = 'Ready';
+  } else if (state === 'error') {
+    label = 'Error';
   }
 
   statusText.textContent = label;
@@ -1408,19 +1421,227 @@ setStatusCallback(({ text, state, progress }) => {
   if (state === 'ready') statusDot.classList.add('ready');
   else if (state === 'loading') statusDot.classList.add('loading');
   else if (state === 'error') statusDot.classList.add('error');
+}
+
+setStatusCallback(handleModelStatus);
+
+setModelChangeCallback((modelId) => {
+  modelSelect.value = modelId;
+  setPreference('selected_model', modelId).catch((err) => console.error('[ERROR]', err));
+  showToast('Switched to Qwen 0.5B — lighter on GPU memory');
 });
 
 // ---- Setup wizard ----
 
 let setupStep = 0;
-const SETUP_STEPS = 4;
+const SETUP_STEPS = 6;
+let setupMandatory = false;
+let setupRequirementsPassed = false;
+let setupModelLoading = false;
+let setupRecommendedModelId = MODEL_CATALOG[0].id;
 let setupDraft = {
   mode: 'grammar',
   outputLanguage: 'english',
   colorTheme: 'light-default',
   darkMode: false,
+  modelId: MODEL_CATALOG[0].id,
 };
 let setupAppearanceSnapshot = null;
+
+function updateSetupActions() {
+  const onRequirementsStep = setupStep === 1;
+  const onModelStep = setupStep === 2;
+
+  setupClose.hidden = setupMandatory;
+  setupBack.hidden = setupStep === 0 || setupModelLoading;
+
+  if (setupModelLoading) {
+    setupNext.disabled = true;
+    setupNext.textContent = 'Downloading…';
+    return;
+  }
+
+  setupNext.disabled = onRequirementsStep && !setupRequirementsPassed;
+  setupNext.textContent = setupStep === SETUP_STEPS - 1 ? 'Get started' : 'Continue';
+}
+
+function renderDeviceSpecs(specs) {
+  if (!specs) return '';
+
+  const rows = [
+    ['Browser', specs.browser],
+    ['OS / platform', specs.platform],
+    ['CPU cores', String(specs.cpuCores)],
+    ['Device memory', specs.deviceMemoryGB],
+    ['GPU', specs.gpu],
+    ['GPU vendor', specs.gpuVendor],
+    ['WebGPU status', specs.webgpuStatus],
+    ['Screen', specs.screen],
+    ['Pixel ratio', String(specs.pixelRatio)],
+  ];
+
+  return `
+    <div class="setup-specs">
+      <h3 class="setup-specs-title">Your device</h3>
+      <table class="setup-specs-table">
+        <tbody>
+          ${rows
+            .map(
+              ([label, value]) => `
+            <tr>
+              <th scope="row">${escapeHtml(label)}</th>
+              <td>${escapeHtml(value)}</td>
+            </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>
+      <p class="setup-specs-note">Memory and GPU details are what your browser reports — they may not match Task Manager exactly.</p>
+    </div>`;
+}
+
+function renderRequirementChecks(report) {
+  const { results, capabilities, specs } = report;
+
+  const rows = results
+    .map((item) => {
+      const state = item.warn ? 'warn' : item.ok ? 'ok' : 'fail';
+      const icon = item.warn ? '!' : item.ok ? '✓' : '✕';
+      return `
+      <li class="setup-check-item ${state}">
+        <span class="setup-check-icon" aria-hidden="true">${icon}</span>
+        <div>
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.detail)}</span>
+        </div>
+      </li>`;
+    })
+    .join('');
+
+  let gpuHint = '';
+  if (capabilities?.supported) {
+    const rec = MODEL_CATALOG.find((m) => m.id === capabilities.recommendedModelId);
+    gpuHint = `
+      <p class="setup-hint">
+        ${capabilities.description ? `Detected: ${escapeHtml(capabilities.description)}.` : 'GPU check complete.'}
+        ${capabilities.isIntegratedGPU ? ' Integrated graphics detected —' : ''}
+        Recommended: <strong>${escapeHtml(rec?.label || 'Qwen 0.5B')}</strong>.
+      </p>`;
+    setupRecommendedModelId = capabilities.recommendedModelId;
+    setupDraft.modelId = capabilities.recommendedModelId;
+  }
+
+  setupBody.innerHTML = `
+    ${renderDeviceSpecs(specs)}
+    <h3 class="setup-specs-title">Requirements</h3>
+    <ul class="setup-check-list">${rows}</ul>
+    ${gpuHint}
+    ${
+      !setupRequirementsPassed
+        ? '<p class="setup-error">EditorPilot cannot run until all requirements pass. Try a supported browser or update your GPU drivers.</p>'
+        : ''
+    }`;
+}
+
+async function runSetupRequirementsCheck() {
+  setupRequirementsPassed = false;
+  updateSetupActions();
+  setupBody.innerHTML = '<p class="setup-checking">Checking your browser and device…</p>';
+
+  try {
+    const report = await checkEditorRequirements();
+    setupRequirementsPassed = report.passed;
+    renderRequirementChecks(report);
+  } catch (err) {
+    console.error('[ERROR]', err);
+    setupBody.innerHTML =
+      '<p class="setup-error">Could not complete the requirements check. Refresh and try again.</p>';
+  }
+
+  updateSetupActions();
+}
+
+function renderSetupModelOptions() {
+  const cards = MODEL_CATALOG.map((model) => {
+    const selected = setupDraft.modelId === model.id;
+    const recommended =
+      model.id === setupRecommendedModelId ? ' <span class="setup-badge">Recommended</span>' : '';
+    return `
+      <button type="button" class="setup-option setup-model-option ${selected ? 'selected' : ''}" data-model-id="${model.id}">
+        <div>
+          <strong>${escapeHtml(model.label)}${recommended}</strong>
+          <span class="setup-model-meta">${escapeHtml(model.size)} · ${escapeHtml(model.languages)}</span>
+          <span>${escapeHtml(model.description)}</span>
+        </div>
+      </button>`;
+  }).join('');
+
+  setupBody.innerHTML = `
+    <p class="setup-hint">Choose a model that fits your device. You can change it later in the header. Smaller models use less GPU memory.</p>
+    <div class="setup-options">${cards}</div>
+    <div id="setup-model-progress" class="setup-model-progress" hidden>
+      <span class="panel-fixing-spinner" aria-hidden="true"></span>
+      <span id="setup-model-progress-text">Preparing model…</span>
+    </div>`;
+
+  setupBody.querySelectorAll('.setup-model-option').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setupDraft.modelId = btn.dataset.modelId;
+      setupBody.querySelectorAll('.setup-model-option').forEach((el) => {
+        el.classList.toggle('selected', el.dataset.modelId === setupDraft.modelId);
+      });
+    });
+  });
+}
+
+async function downloadSetupModel() {
+  const modelId = setupDraft.modelId;
+  setSelectedModelPref(modelId);
+  modelSelect.value = modelId;
+
+  if (isAIReady() && getActiveModelId() === modelId) {
+    return true;
+  }
+
+  setupModelLoading = true;
+  updateSetupActions();
+
+  const progressEl = document.getElementById('setup-model-progress');
+  const progressText = document.getElementById('setup-model-progress-text');
+  progressEl?.removeAttribute('hidden');
+
+  const statusHandler = ({ text, state, progress }) => {
+    if (!progressText) return;
+    if (state === 'loading' && progress != null) {
+      const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
+      progressText.textContent = `${text} ${pct}%`;
+    } else {
+      progressText.textContent = text;
+    }
+  };
+
+  setStatusCallback((payload) => {
+    statusHandler(payload);
+    handleModelStatus(payload);
+  });
+
+  try {
+    await initAI(modelId, { force: true });
+    await setPreference('selected_model', modelId);
+    return true;
+  } catch (err) {
+    console.error('[ERROR]', err);
+    showToast('Could not load that model — try Qwen 0.5B');
+    if (progressText) {
+      progressText.textContent = 'Download failed. Pick a smaller model and try again.';
+    }
+    return false;
+  } finally {
+    setStatusCallback(handleModelStatus);
+    setupModelLoading = false;
+    updateSetupActions();
+  }
+}
 
 function applySetupPreview() {
   const theme = setupDraft.darkMode ? 'dark' : setupDraft.colorTheme;
@@ -1440,18 +1661,33 @@ function restoreSetupAppearanceSnapshot() {
 
 function renderSetupStep() {
   setupProgress.textContent = `Step ${setupStep + 1} of ${SETUP_STEPS}`;
-  setupBack.hidden = setupStep === 0;
-  setupNext.textContent = setupStep === SETUP_STEPS - 1 ? 'Get started' : 'Continue';
+  updateSetupActions();
 
   if (setupStep === 0) {
     setupTitle.textContent = 'Welcome to EditorPilot';
     setupMessage.textContent =
-      'A calm, private writing board. Everything runs on your device — nothing is sent to a server.';
+      'EditorPilot is an AI writing assistant that lives entirely in your browser. No data leaves your device. No accounts. No tracking. Just better writing.';
     setupBody.innerHTML = '';
     return;
   }
 
   if (setupStep === 1) {
+    setupTitle.textContent = 'Check requirements';
+    setupMessage.textContent =
+      'EditorPilot needs WebGPU and local storage. We will verify your browser before continuing.';
+    void runSetupRequirementsCheck();
+    return;
+  }
+
+  if (setupStep === 2) {
+    setupTitle.textContent = 'Choose your AI model';
+    setupMessage.textContent =
+      'Models download once and are cached in your browser. Pick a size that matches your GPU memory.';
+    renderSetupModelOptions();
+    return;
+  }
+
+  if (setupStep === 3) {
     setupTitle.textContent = 'How should AI fix your writing?';
     setupMessage.textContent = 'Pick a default style and output language for the Updated Version panel.';
     setupBody.innerHTML = `
@@ -1496,7 +1732,7 @@ function renderSetupStep() {
     return;
   }
 
-  if (setupStep === 2) {
+  if (setupStep === 4) {
     setupTitle.textContent = 'Choose your look';
     setupMessage.textContent = 'Pick colors that are easy on your eyes. You can change these anytime.';
     setupBody.innerHTML = `
@@ -1546,7 +1782,7 @@ function renderSetupStep() {
     return;
   }
 
-  if (setupStep === 3) {
+  if (setupStep === 5) {
     setupTitle.textContent = 'Quick guide';
     setupMessage.textContent = 'A few things to know about your workspace.';
     setupBody.innerHTML = `
@@ -1560,19 +1796,25 @@ function renderSetupStep() {
       </ul>`;
   }
 
-  if (setupStep >= 2) {
+  if (setupStep >= 4) {
     applySetupPreview();
   }
 }
 
 function collectSetupStep() {
-  if (setupStep === 1) {
+  if (setupStep === 2) {
+    const selected = setupBody.querySelector('.setup-model-option.selected');
+    if (selected?.dataset.modelId) {
+      setupDraft.modelId = selected.dataset.modelId;
+    }
+  }
+  if (setupStep === 3) {
     const lang = document.getElementById('setup-language')?.value || 'english';
     const mode = document.getElementById('setup-mode')?.value || 'grammar';
     setupDraft.outputLanguage = lang;
     setupDraft.mode = mode;
   }
-  if (setupStep === 2) {
+  if (setupStep === 4) {
     setupDraft.colorTheme = document.getElementById('setup-theme')?.value || 'light-default';
   }
 }
@@ -1588,20 +1830,30 @@ async function finishSetup() {
   setMode(setupDraft.mode);
   setOutputLanguage(setupDraft.outputLanguage || 'english');
 
+  setSelectedModelPref(setupDraft.modelId);
+  modelSelect.value = setupDraft.modelId;
+  await setPreference('selected_model', setupDraft.modelId);
+
   await setPreference('setup_complete', '1');
+  setupMandatory = false;
   setupAppearanceSnapshot = null;
   setupOverlay.hidden = true;
+  updateSetupActions();
   showToast('Welcome to EditorPilot');
 }
 
-function openSetupWizard(resetStep = false) {
+function openSetupWizard(resetStep = false, mandatory = false) {
+  setupMandatory = mandatory;
   if (resetStep) {
     setupStep = 0;
+    setupRequirementsPassed = false;
+    setupModelLoading = false;
     setupDraft = {
       mode: currentMode,
       outputLanguage,
       colorTheme,
       darkMode,
+      modelId: getSelectedModelPref() !== 'auto' ? getSelectedModelPref() : MODEL_CATALOG[0].id,
     };
     captureSetupAppearanceSnapshot();
   }
@@ -1610,18 +1862,24 @@ function openSetupWizard(resetStep = false) {
 }
 
 async function closeSetupWizard() {
+  if (setupMandatory) return;
   if (setupStep > 0) {
     collectSetupStep();
   }
   restoreSetupAppearanceSnapshot();
   setupAppearanceSnapshot = null;
-  await setPreference('setup_complete', '1').catch((err) => console.error('[ERROR]', err));
   setupOverlay.hidden = true;
 }
 
 function bindSetupWizard() {
   setupNext.addEventListener('click', async () => {
     collectSetupStep();
+
+    if (setupStep === 2) {
+      const loaded = await downloadSetupModel();
+      if (!loaded) return;
+    }
+
     if (setupStep < SETUP_STEPS - 1) {
       setupStep++;
       renderSetupStep();
@@ -1631,9 +1889,10 @@ function bindSetupWizard() {
   });
 
   setupBack.addEventListener('click', () => {
+    if (setupModelLoading) return;
     if (setupStep > 0) {
       collectSetupStep();
-      if (setupStep === 2) {
+      if (setupStep === 4) {
         restoreSetupAppearanceSnapshot();
       }
       setupStep--;
@@ -1642,7 +1901,7 @@ function bindSetupWizard() {
   });
 
   setupClose.addEventListener('click', () => {
-    closeSetupWizard();
+    void closeSetupWizard();
   });
 }
 
@@ -1813,6 +2072,7 @@ function bindEvents() {
       if (!rewriteOverlay.hidden) closeRewriteModal();
       if (!donationModal.hidden) donationModal.hidden = true;
       if (!legalOverlay.hidden) legalOverlay.hidden = true;
+      if (setupMandatory && !setupOverlay.hidden) return;
     }
   });
 
@@ -1872,7 +2132,7 @@ function bindEvents() {
     legalOverlay.hidden = true;
   });
 
-  btnDonateFab.addEventListener('click', () => {
+  btnDonate?.addEventListener('click', () => {
     donationModal.hidden = false;
   });
 
@@ -1903,9 +2163,9 @@ function bindEvents() {
 
   modelSelect.addEventListener('change', async () => {
     syncOutputLanguageOptions();
-    if (needsMultilingualModel() && modelSelect.value !== GEMMA_MODEL_ID) {
-      modelSelect.value = GEMMA_MODEL_ID;
-      showToast('This language uses Gemma 2 9B only');
+    if (needsMultilingualModel() && !isMultilingualCapableModel(modelSelect.value)) {
+      modelSelect.value = GEMMA_2B_MODEL_ID;
+      showToast('This language uses Gemma 2 2B or Gemma 2 9B');
       return;
     }
     const pref = modelSelect.value;
@@ -1939,7 +2199,7 @@ function bindEvents() {
 
   document.getElementById('btn-delete-all').addEventListener('click', deleteAllLocalData);
 
-  document.getElementById('btn-setup').addEventListener('click', () => openSetupWizard(true));
+  document.getElementById('btn-setup').addEventListener('click', () => openSetupWizard(true, false));
 
   window.addEventListener('pagehide', () => {
     clearTimeout(autosaveTimer);
@@ -2010,25 +2270,14 @@ async function bootstrap() {
 
     const setupDone = await getPreference('setup_complete');
     if (setupDone !== '1') {
-      const existingDocs = await getDocuments(1);
-      if (savedMode || existingDocs.length) {
-        await setPreference('setup_complete', '1');
-      } else {
-        openSetupWizard(true);
-      }
-    }
-
-    const gpu = await checkWebGPUSupport();
-    if (!gpu.supported) {
-      statusText.textContent = gpu.reason;
-      statusDot.classList.add('error');
-      showToast('WebGPU unavailable — updates disabled');
+      openSetupWizard(true, true);
     } else {
+      statusText.textContent = 'Starting…';
       try {
         await initAI(getSelectedModelPref());
       } catch (err) {
         console.error('[ERROR]', err);
-        showToast('Model failed to load — try refreshing');
+        showToast('Model failed to load — try a smaller model in the header');
       }
     }
 

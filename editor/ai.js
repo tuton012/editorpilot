@@ -4,7 +4,12 @@
 
 import * as webllm from 'https://esm.run/@mlc-ai/web-llm';
 
+export const GEMMA_2B_MODEL_ID = 'gemma-2-2b-it-q4f16_1-MLC';
 export const GEMMA_MODEL_ID = 'gemma-2-9b-it-q4f16_1-MLC';
+export const SMOLLM_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
+export const LLAMA_1B_MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+
+export const MULTILINGUAL_MODEL_IDS = new Set([GEMMA_2B_MODEL_ID, GEMMA_MODEL_ID]);
 export const APP_NAME = 'EditorPilot';
 export const MIN_TEXT_LENGTH = 3;
 export const MAX_CORRECTION_LENGTH = 8000;
@@ -12,14 +17,70 @@ export const MAX_HIGHLIGHT_LENGTH = 2000;
 
 export const AVAILABLE_MODELS = [
   { id: 'auto', label: 'Auto (recommended)' },
+  { id: SMOLLM_MODEL_ID, label: 'SmolLM2 360M' },
   { id: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC', label: 'Qwen 0.5B' },
+  { id: LLAMA_1B_MODEL_ID, label: 'Llama 3.2 1B' },
   { id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC', label: 'Qwen 1.5B' },
-  { id: 'gemma-2-9b-it-q4f16_1-MLC', label: 'Gemma 2 9B' },
+  { id: GEMMA_2B_MODEL_ID, label: 'Gemma 2 2B' },
+  { id: GEMMA_MODEL_ID, label: 'Gemma 2 9B' },
+];
+
+/** User-facing model catalog for setup and model picker. */
+export const MODEL_CATALOG = [
+  {
+    id: SMOLLM_MODEL_ID,
+    label: 'SmolLM2 360M',
+    size: '~200 MB',
+    description: 'Ultra-light. Best for very weak GPUs or when other models fail to load.',
+    languages: 'English',
+    tier: 'ultra',
+  },
+  {
+    id: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
+    label: 'Qwen 0.5B',
+    size: '~300 MB',
+    description: 'Light and fast. Best for laptops with integrated graphics or limited GPU memory.',
+    languages: 'English, Spanish',
+    tier: 'light',
+  },
+  {
+    id: LLAMA_1B_MODEL_ID,
+    label: 'Llama 3.2 1B',
+    size: '~700 MB',
+    description: 'Strong English editing on low-end hardware. A good alternative to Qwen 1.5B.',
+    languages: 'English',
+    tier: 'standard',
+  },
+  {
+    id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
+    label: 'Qwen 1.5B',
+    size: '~900 MB',
+    description: 'Balanced quality and speed. A good default when your GPU has headroom.',
+    languages: 'English, Spanish',
+    tier: 'standard',
+  },
+  {
+    id: GEMMA_2B_MODEL_ID,
+    label: 'Gemma 2 2B',
+    size: '~1.4 GB',
+    description: 'Mid-tier multilingual model. Lighter than Gemma 9B with broader language support.',
+    languages: 'Most supported languages',
+    tier: 'mid',
+  },
+  {
+    id: GEMMA_MODEL_ID,
+    label: 'Gemma 2 9B',
+    size: '~5.5 GB',
+    description: 'Highest quality and all supported languages. Needs a strong GPU and plenty of VRAM.',
+    languages: 'All supported languages',
+    tier: 'heavy',
+  },
 ];
 
 const MODEL_CANDIDATES = {
+  ultra: SMOLLM_MODEL_ID,
   weak: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
-  normal: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
+  normal: LLAMA_1B_MODEL_ID,
   fallback: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
 };
 
@@ -32,10 +93,15 @@ let isLoading = false;
 let initPromise = null;
 let sessionId = 0;
 let onStatusChange = null;
+let onModelChange = null;
 let aiChain = Promise.resolve();
 
 export function setStatusCallback(cb) {
   onStatusChange = cb;
+}
+
+export function setModelChangeCallback(cb) {
+  onModelChange = cb;
 }
 
 function emitStatus(text, state, progress) {
@@ -69,10 +135,18 @@ export function getModelLabel(modelId) {
   const found = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (found) return found.label;
   if (!modelId) return 'Auto';
+  if (modelId.includes('SmolLM')) return 'SmolLM2 360M';
+  if (modelId.includes('Llama-3.2-1B')) return 'Llama 3.2 1B';
+  if (modelId.includes('gemma-2-2b')) return 'Gemma 2 2B';
   if (modelId.includes('gemma')) return 'Gemma 2 9B';
   if (modelId.includes('0.5B')) return 'Qwen 0.5B';
   if (modelId.includes('1.5B')) return 'Qwen 1.5B';
   return 'Ready';
+}
+
+export function isMultilingualCapableModel(modelId = getActiveModelId()) {
+  if (!modelId) return false;
+  return MULTILINGUAL_MODEL_IDS.has(modelId);
 }
 
 export function resolveModelId(pref) {
@@ -80,28 +154,291 @@ export function resolveModelId(pref) {
   return pref;
 }
 
-/** Prefer small fast models — never auto-load 3B. */
+/** Prefer small fast models — conservative for integrated GPUs. */
 export function selectModelForDevice() {
   const memory = navigator.deviceMemory || 4;
-  if (memory <= 4) {
-    return MODEL_CANDIDATES.weak;
+  if (memory >= 16) {
+    return MODEL_CANDIDATES.normal;
   }
-  return MODEL_CANDIDATES.normal;
+  if (memory >= 8) {
+    return 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC';
+  }
+  return MODEL_CANDIDATES.fallback;
+}
+
+export async function requestWebGPUAdapter() {
+  if (!navigator.gpu) return null;
+
+  const optionsList = [
+    { powerPreference: 'high-performance' },
+    {},
+    { powerPreference: 'low-power' },
+    { forceFallbackAdapter: true },
+  ];
+
+  for (const options of optionsList) {
+    try {
+      const adapter = await navigator.gpu.requestAdapter(options);
+      if (adapter) return adapter;
+    } catch (err) {
+      console.warn('[WebGPU] Adapter request failed:', options, err);
+    }
+  }
+
+  return null;
+}
+
+function parseBrowserName(userAgent = '') {
+  if (/Edg\//.test(userAgent)) return 'Microsoft Edge';
+  if (/OPR\//.test(userAgent) || /Opera/.test(userAgent)) return 'Opera';
+  if (/Chrome\//.test(userAgent)) return 'Google Chrome';
+  if (/Firefox\//.test(userAgent)) return 'Firefox';
+  if (/Safari\//.test(userAgent)) return 'Safari';
+  return 'Browser';
+}
+
+export async function getUserDeviceSpecs(gpuResult = null) {
+  const gpu = gpuResult || (await checkWebGPUSupport());
+  let gpuName = 'Not detected';
+  let gpuVendor = '—';
+
+  if (gpu.adapter) {
+    try {
+      const info = gpu.adapter.info;
+      gpuName = info?.description || info?.device || 'GPU detected';
+      gpuVendor = info?.vendor || '—';
+    } catch {
+      gpuName = 'GPU detected';
+    }
+  } else if (gpu.warning) {
+    gpuName = 'API available (adapter not confirmed in check)';
+  } else if (!navigator.gpu) {
+    gpuName = 'WebGPU not supported in this browser';
+  }
+
+  const userAgent = navigator.userAgent || '';
+  const platform =
+    navigator.userAgentData?.platform ||
+    navigator.platform ||
+    'Unknown';
+
+  return {
+    browser: parseBrowserName(userAgent),
+    platform,
+    cpuCores: navigator.hardwareConcurrency || 'Unknown',
+    deviceMemoryGB: navigator.deviceMemory
+      ? `${navigator.deviceMemory} GB (browser-reported)`
+      : 'Unknown (browser did not report)',
+    gpu: gpuName,
+    gpuVendor,
+    webgpuStatus: gpu.confirmed
+      ? 'Confirmed'
+      : gpu.warning
+        ? 'API available — will verify when loading model'
+        : 'Not available',
+    screen: `${window.screen.width} × ${window.screen.height}`,
+    pixelRatio: window.devicePixelRatio || 1,
+    userAgent,
+  };
 }
 
 export async function checkWebGPUSupport() {
   if (!navigator.gpu) {
     return { supported: false, reason: 'WebGPU is not available in this browser.' };
   }
+
   try {
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) {
-      return { supported: false, reason: 'No WebGPU adapter found. Try updating your GPU drivers.' };
+    const adapter = await requestWebGPUAdapter();
+    if (adapter) {
+      return { supported: true, adapter, confirmed: true };
     }
-    return { supported: true };
+
+    // WebGPU API exists but adapter probe failed — allow continue; WebLLM may still load.
+    return {
+      supported: true,
+      adapter: null,
+      confirmed: false,
+      warning:
+        'WebGPU API is available but this quick check could not confirm a GPU adapter. You can continue — EditorPilot will verify when loading your model.',
+    };
   } catch (err) {
     console.error('[ERROR]', err);
     return { supported: false, reason: err.message || 'WebGPU check failed.' };
+  }
+}
+
+export function checkOPFSSupport() {
+  if (!window.isSecureContext) {
+    return {
+      supported: false,
+      reason: 'A secure connection is required (HTTPS or localhost).',
+    };
+  }
+  if (!navigator.storage?.getDirectory) {
+    return {
+      supported: false,
+      reason: 'Local storage is not available. Use Chrome, Edge, Firefox 111+, or Safari 16.4+.',
+    };
+  }
+  return { supported: true };
+}
+
+function isIntegratedGPU(description = '') {
+  const text = description.toLowerCase();
+  if (!text) return true;
+  if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro [w\d]/i.test(description)) {
+    return false;
+  }
+  return /radeon|intel|iris|uhd|vega|integrated|apple|adreno|mali/i.test(text);
+}
+
+export async function checkDeviceCapabilities(gpuResult = null) {
+  const gpu = gpuResult || (await checkWebGPUSupport());
+  if (!gpu.supported) {
+    return {
+      supported: false,
+      reason: gpu.reason,
+      recommendedModelId: MODEL_CANDIDATES.fallback,
+      isIntegratedGPU: true,
+    };
+  }
+
+  let description = '';
+  if (gpu.adapter) {
+    try {
+      const info = gpu.adapter.info;
+      description = info?.description || info?.device || '';
+    } catch {
+      /* adapter.info may be unavailable */
+    }
+  } else if (gpu.warning) {
+    description = 'GPU adapter not confirmed in quick check';
+  }
+
+  const integrated = isIntegratedGPU(description);
+  const memory = navigator.deviceMemory || 4;
+  let recommendedModelId = MODEL_CANDIDATES.normal;
+
+  if (integrated || memory <= 4) {
+    recommendedModelId = MODEL_CANDIDATES.fallback;
+  } else if (memory >= 16 && !integrated) {
+    recommendedModelId = 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC';
+  } else if (memory >= 8) {
+    recommendedModelId = MODEL_CANDIDATES.normal;
+  }
+
+  return {
+    supported: true,
+    description: description || 'GPU detected',
+    isIntegratedGPU: integrated,
+    deviceMemoryGB: memory,
+    recommendedModelId,
+  };
+}
+
+export async function checkEditorRequirements() {
+  const gpu = await checkWebGPUSupport();
+  const specs = await getUserDeviceSpecs(gpu);
+
+  const secure = {
+    id: 'secure',
+    label: 'Secure connection',
+    ok: window.isSecureContext,
+    detail: window.isSecureContext
+      ? 'Running on HTTPS or localhost'
+      : 'Open EditorPilot over HTTPS or localhost.',
+  };
+
+  const webgpu = {
+    id: 'webgpu',
+    label: 'WebGPU',
+    ok: gpu.supported,
+    warn: !!gpu.warning,
+    detail: gpu.warning || (gpu.confirmed ? 'GPU acceleration is available' : gpu.reason),
+  };
+
+  const opfsCheck = checkOPFSSupport();
+  const opfs = {
+    id: 'opfs',
+    label: 'Local storage',
+    ok: opfsCheck.supported,
+    detail: opfsCheck.supported
+      ? 'Drafts and settings can be saved on this device'
+      : opfsCheck.reason,
+  };
+
+  const capabilities = gpu.supported ? await checkDeviceCapabilities(gpu) : null;
+
+  return {
+    passed: secure.ok && webgpu.ok && opfs.ok,
+    results: [secure, webgpu, opfs],
+    capabilities,
+    specs,
+  };
+}
+
+function isGPURecoverableError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('device was lost') ||
+    msg.includes('already been disposed') ||
+    msg.includes('modelnotloaded') ||
+    msg.includes('out of memory') ||
+    msg.includes('insufficient memory') ||
+    msg.includes('gpu')
+  );
+}
+
+export async function resetAI() {
+  sessionId++;
+  if (engine) {
+    try {
+      if (typeof engine.unload === 'function') {
+        await engine.unload();
+      }
+    } catch (err) {
+      console.error('[AI] unload failed:', err);
+    }
+  }
+  engine = null;
+  currentModelId = null;
+  isReady = false;
+  isLoading = false;
+  initPromise = null;
+  aiChain = Promise.resolve();
+}
+
+async function recoverFromGPUError() {
+  console.warn('[AI] Recovering from GPU error — switching to lighter model');
+  const previousPref = selectedModelPref;
+  await resetAI();
+  selectedModelPref = MODEL_CANDIDATES.fallback;
+  try {
+    await initAI(MODEL_CANDIDATES.fallback, { force: true });
+    return previousPref !== MODEL_CANDIDATES.fallback;
+  } catch (err) {
+    console.error('[AI] Recovery failed:', err);
+    throw err;
+  }
+}
+
+async function safeChatCompletion(createFn, requestId) {
+  try {
+    return await createFn();
+  } catch (err) {
+    if (isStale(requestId) || !isGPURecoverableError(err)) {
+      throw err;
+    }
+    console.error('[AI] GPU/runtime error during inference:', err);
+    const downgraded = await recoverFromGPUError();
+    if (downgraded) {
+      emitStatus('Using lighter model after GPU error', 'ready');
+      onModelChange?.(MODEL_CANDIDATES.fallback);
+    }
+    if (isStale(requestId) || !engine || !isReady) {
+      return null;
+    }
+    return createFn();
   }
 }
 
@@ -135,6 +472,10 @@ async function loadEngine(pref, modelId) {
     throw new Error(gpuCheck.reason);
   }
 
+  if (engine) {
+    await resetAI();
+  }
+
   isLoading = true;
   selectedModelPref = pref;
   currentModelId = modelId;
@@ -161,6 +502,7 @@ async function loadEngine(pref, modelId) {
       });
 
       currentModelId = tryModel;
+      selectedModelPref = tryModel === modelId ? pref : MODEL_CANDIDATES.fallback;
       isReady = true;
       isLoading = false;
       emitStatus('Ready', 'ready');
@@ -171,6 +513,9 @@ async function loadEngine(pref, modelId) {
       console.error('[ERROR]', err);
       engine = null;
       isReady = false;
+      if (isGPURecoverableError(err)) {
+        await resetAI();
+      }
     }
   }
 
@@ -190,10 +535,7 @@ export async function switchModel(modelPref) {
     return engine;
   }
 
-  initPromise = null;
-  isReady = false;
-  engine = null;
-  isLoading = false;
+  await resetAI();
   await initAI(pref, { force: true });
 }
 
@@ -393,16 +735,21 @@ async function generateCorrection(mode, text, requestId, options = {}) {
   const { maxTokens = 512, temperature = 0.1 } = options;
   const { system, user } = getCorrectionMessages(mode, text);
 
-  const reply = await engine.chat.completions.create({
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-    temperature,
-    max_tokens: maxTokens,
-  });
+  const reply = await safeChatCompletion(
+    () =>
+      engine.chat.completions.create({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    requestId
+  );
 
   if (isStale(requestId)) return null;
+  if (!reply) return null;
 
   const raw = reply?.choices?.[0]?.message?.content || '';
   return cleanCorrectionOutput(raw, text, mode);
@@ -419,13 +766,18 @@ async function generate(prompt, requestId, options = {}) {
 
   const { maxTokens = 512, temperature = 0.1 } = options;
 
-  const reply = await engine.chat.completions.create({
-    messages: [{ role: 'user', content: prompt }],
-    temperature,
-    max_tokens: maxTokens,
-  });
+  const reply = await safeChatCompletion(
+    () =>
+      engine.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    requestId
+  );
 
   if (isStale(requestId)) return null;
+  if (!reply) return null;
 
   return cleanAIOutput(reply?.choices?.[0]?.message?.content || '');
 }
@@ -673,7 +1025,13 @@ export function getActiveModelId() {
 
 export function isSmallTierModel(modelId = getActiveModelId()) {
   if (!modelId) return true;
-  return modelId.includes('0.5B') || modelId.includes('1.5B');
+  if (isMultilingualCapableModel(modelId)) return false;
+  return (
+    modelId.includes('SmolLM') ||
+    modelId.includes('0.5B') ||
+    modelId.includes('1.5B') ||
+    modelId.includes('Llama-3.2-1B')
+  );
 }
 
 /** Output / translation targets for the Updated Version panel. */
@@ -821,16 +1179,21 @@ async function generateTranslation(targetLang, text, requestId, options = {}) {
   const { maxTokens = tokenBudget(text, 1024), temperature = 0.15 } = options;
   const { system, user } = getTranslationMessages(targetLang, text);
 
-  const reply = await engine.chat.completions.create({
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-    temperature,
-    max_tokens: maxTokens,
-  });
+  const reply = await safeChatCompletion(
+    () =>
+      engine.chat.completions.create({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    requestId
+  );
 
   if (isStale(requestId)) return null;
+  if (!reply) return null;
 
   return cleanAIOutput(reply?.choices?.[0]?.message?.content || '') || text;
 }
