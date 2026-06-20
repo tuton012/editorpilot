@@ -1684,6 +1684,39 @@ html[data-theme="dark"] .app.focus-mode::after {
   line-height: 1.5;
 }
 
+.setup-model-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.setup-model-title-row strong {
+  margin-bottom: 0;
+}
+
+.setup-model-cache {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.setup-model-cache.cached {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.setup-model-cache.download {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
 .setup-model-option .setup-model-meta {
   display: block;
   font-size: 0.78rem;

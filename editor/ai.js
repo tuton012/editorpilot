@@ -131,6 +131,32 @@ function formatLoadingStatus(progress, statusText = '') {
   return `Loading… ${pct}%`;
 }
 
+export function getCatalogModel(modelId) {
+  return MODEL_CATALOG.find((m) => m.id === modelId) || null;
+}
+
+export async function isModelCached(modelId) {
+  if (!modelId || modelId === 'auto') return false;
+  try {
+    return await webllm.hasModelInCache(modelId, webllm.prebuiltAppConfig);
+  } catch (err) {
+    console.warn('[AI] cache check failed:', err);
+    return false;
+  }
+}
+
+export async function refreshModelsCacheStatus(
+  modelIds = MODEL_CATALOG.map((m) => m.id)
+) {
+  const status = {};
+  await Promise.all(
+    modelIds.map(async (id) => {
+      status[id] = await isModelCached(id);
+    })
+  );
+  return status;
+}
+
 export function getModelLabel(modelId) {
   const found = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (found) return found.label;

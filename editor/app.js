@@ -16,6 +16,12 @@ import {
   setSelectedModelPref,
   setModelChangeCallback,
   getActiveModelId,
+  resolveModelId,
+  getModelLabel,
+  getCatalogModel,
+  isModelCached,
+  refreshModelsCacheStatus,
+  AVAILABLE_MODELS,
   isSmallTierModel,
   isMultilingualCapableModel,
   isAIReady,
@@ -270,10 +276,21 @@ function applyAppearance() {
 
 // ---- Confirm modal ----
 
-function showConfirmModal({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
+function showConfirmModal({
+  title,
+  message,
+  messageHtml,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+}) {
   return new Promise((resolve) => {
     modalTitle.textContent = title;
-    modalMessage.textContent = message;
+    if (messageHtml) {
+      modalMessage.innerHTML = messageHtml;
+    } else {
+      modalMessage.textContent = message;
+    }
     modalCancel.textContent = cancelText;
     modalConfirm.textContent = confirmText;
     modalConfirm.className = danger ? 'btn btn-danger' : 'btn btn-primary';
@@ -1397,23 +1414,96 @@ async function deleteAllLocalData() {
 
 // ---- Model status UI ----
 
-function handleModelStatus({ text, state, progress }) {
-  let label = text;
+let modelCacheStatus = {};
+let lastModelSelectValue = 'auto';
 
-  if (state === 'loading') {
-    if (text.startsWith('Checking')) {
-      label = 'Checking…';
-    } else if (progress !== undefined && progress !== null) {
-      const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-      label = `Loading… ${pct}%`;
-    } else {
-      label = 'Loading…';
-    }
-  } else if (state === 'ready') {
-    label = 'Ready';
-  } else if (state === 'error') {
-    label = 'Error';
+function formatLoadingLabel({ text, state, progress }) {
+  if (state !== 'loading') return text;
+  if (text?.startsWith('Checking')) return 'Checking…';
+  if (/%\s*$/.test(String(text || '').trim())) return text;
+  if (progress !== undefined && progress !== null) {
+    const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
+    return `Loading… ${pct}%`;
   }
+  return text || 'Loading…';
+}
+
+function cacheStatusLabel(cached) {
+  return cached ? 'Cached' : 'Download';
+}
+
+function initModelSelect() {
+  const current = modelSelect.value || getSelectedModelPref() || 'auto';
+  modelSelect.innerHTML = AVAILABLE_MODELS.map((model) => {
+    const langOnly = isMultilingualCapableModel(model.id) ? ' data-lang-only="true"' : '';
+    return `<option value="${escapeHtml(model.id)}" data-label="${escapeHtml(model.label)}"${langOnly}>${escapeHtml(model.label)}</option>`;
+  }).join('');
+  modelSelect.value = AVAILABLE_MODELS.some((m) => m.id === current) ? current : 'auto';
+  lastModelSelectValue = modelSelect.value;
+}
+
+async function refreshModelCacheIndicators() {
+  try {
+    modelCacheStatus = await refreshModelsCacheStatus();
+  } catch (err) {
+    console.warn('[CACHE] Could not refresh model cache status', err);
+  }
+
+  modelSelect.querySelectorAll('option').forEach((opt) => {
+    if (!opt.value || opt.value === 'auto') {
+      opt.textContent = opt.dataset.label || 'Auto (recommended)';
+      return;
+    }
+    const base = opt.dataset.label || getModelLabel(opt.value);
+    const cached = modelCacheStatus[opt.value];
+    opt.textContent = `${base} · ${cacheStatusLabel(cached)}`;
+  });
+
+  setupBody?.querySelectorAll('.setup-model-option').forEach((btn) => {
+    const id = btn.dataset.modelId;
+    const badge = btn.querySelector('.setup-model-cache');
+    if (!badge || !id) return;
+    const cached = modelCacheStatus[id];
+    badge.textContent = cacheStatusLabel(cached);
+    badge.classList.toggle('cached', !!cached);
+    badge.classList.toggle('download', !cached);
+  });
+}
+
+async function showModelDownloadConfirm(modelId) {
+  const catalog = getCatalogModel(modelId);
+  const label = catalog?.label || getModelLabel(modelId);
+  const size = catalog?.size || 'unknown size';
+  return showConfirmModal({
+    title: 'Download model?',
+    messageHtml: `<p><strong>${escapeHtml(label)}</strong> will be downloaded and saved in your browser.</p>
+      <p>Download size: <strong>${escapeHtml(size)}</strong></p>
+      <p style="margin-top:12px;font-size:0.88rem;color:var(--text-muted)">After the first download, this model loads from cache — including offline if you install the app.</p>`,
+    confirmText: 'Continue',
+    cancelText: 'Cancel',
+  });
+}
+
+async function confirmModelDownloadIfNeeded(modelId) {
+  if (!modelId || modelId === 'auto') {
+    modelId = resolveModelId('auto');
+  }
+  if (isAIReady() && getActiveModelId() === modelId) {
+    return true;
+  }
+  const cached = modelCacheStatus[modelId] ?? (await isModelCached(modelId));
+  modelCacheStatus[modelId] = cached;
+  if (cached) return true;
+  return showModelDownloadConfirm(modelId);
+}
+
+function handleModelStatus({ text, state, progress }) {
+  const label =
+    state === 'ready'
+      ? 'Ready'
+      : state === 'error'
+        ? 'Error'
+        : formatLoadingLabel({ text, state, progress });
 
   statusText.textContent = label;
   statusText.title = text;
@@ -1427,7 +1517,10 @@ setStatusCallback(handleModelStatus);
 
 setModelChangeCallback((modelId) => {
   modelSelect.value = modelId;
+  lastModelSelectValue = modelId;
+  modelCacheStatus[modelId] = true;
   setPreference('selected_model', modelId).catch((err) => console.error('[ERROR]', err));
+  void refreshModelCacheIndicators();
   showToast('Switched to Qwen 0.5B — lighter on GPU memory');
 });
 
@@ -1566,10 +1659,16 @@ function renderSetupModelOptions() {
     const selected = setupDraft.modelId === model.id;
     const recommended =
       model.id === setupRecommendedModelId ? ' <span class="setup-badge">Recommended</span>' : '';
+    const cached = modelCacheStatus[model.id];
+    const cacheClass = cached ? 'cached' : 'download';
+    const cacheText = cached !== undefined ? cacheStatusLabel(cached) : '…';
     return `
       <button type="button" class="setup-option setup-model-option ${selected ? 'selected' : ''}" data-model-id="${model.id}">
         <div>
-          <strong>${escapeHtml(model.label)}${recommended}</strong>
+          <div class="setup-model-title-row">
+            <strong>${escapeHtml(model.label)}${recommended}</strong>
+            <span class="setup-model-cache ${cacheClass}">${escapeHtml(cacheText)}</span>
+          </div>
           <span class="setup-model-meta">${escapeHtml(model.size)} · ${escapeHtml(model.languages)}</span>
           <span>${escapeHtml(model.description)}</span>
         </div>
@@ -1592,6 +1691,8 @@ function renderSetupModelOptions() {
       });
     });
   });
+
+  void refreshModelCacheIndicators();
 }
 
 async function downloadSetupModel() {
@@ -1603,6 +1704,9 @@ async function downloadSetupModel() {
     return true;
   }
 
+  const ok = await confirmModelDownloadIfNeeded(modelId);
+  if (!ok) return false;
+
   setupModelLoading = true;
   updateSetupActions();
 
@@ -1610,13 +1714,9 @@ async function downloadSetupModel() {
   const progressText = document.getElementById('setup-model-progress-text');
   progressEl?.removeAttribute('hidden');
 
-  const statusHandler = ({ text, state, progress }) => {
-    if (!progressText) return;
-    if (state === 'loading' && progress != null) {
-      const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-      progressText.textContent = `${text} ${pct}%`;
-    } else {
-      progressText.textContent = text;
+  const statusHandler = (payload) => {
+    if (progressText) {
+      progressText.textContent = formatLoadingLabel(payload);
     }
   };
 
@@ -1628,6 +1728,8 @@ async function downloadSetupModel() {
   try {
     await initAI(modelId, { force: true });
     await setPreference('selected_model', modelId);
+    modelCacheStatus[modelId] = true;
+    await refreshModelCacheIndicators();
     return true;
   } catch (err) {
     console.error('[ERROR]', err);
@@ -2163,22 +2265,38 @@ function bindEvents() {
 
   modelSelect.addEventListener('change', async () => {
     syncOutputLanguageOptions();
+    const previous = lastModelSelectValue;
+
     if (needsMultilingualModel() && !isMultilingualCapableModel(modelSelect.value)) {
-      modelSelect.value = GEMMA_2B_MODEL_ID;
+      modelSelect.value = previous;
       showToast('This language uses Gemma 2 2B or Gemma 2 9B');
       return;
     }
+
     const pref = modelSelect.value;
+    const targetId = pref === 'auto' ? resolveModelId('auto') : pref;
+
+    const ok = await confirmModelDownloadIfNeeded(targetId);
+    if (!ok) {
+      modelSelect.value = previous;
+      return;
+    }
+
     setSelectedModelPref(pref);
     await setPreference('selected_model', pref).catch((err) => console.error('[ERROR]', err));
     modelSelect.disabled = true;
     try {
       await switchModel(pref);
       syncOutputLanguageOptions();
+      lastModelSelectValue = pref;
+      modelCacheStatus[targetId] = true;
+      await refreshModelCacheIndicators();
       scheduleDebouncedAI();
       showToast('Model changed');
     } catch (err) {
       console.error('[ERROR]', err);
+      modelSelect.value = previous;
+      lastModelSelectValue = previous;
       showToast('Could not load that model');
     } finally {
       modelSelect.disabled = false;
@@ -2222,6 +2340,7 @@ async function bootstrap() {
   bindEvents();
   bindPwaInstall();
   bindSetupWizard();
+  initModelSelect();
   setFixing(false);
   updateNewUpdatePanel('');
   updateDocStats('');
@@ -2267,6 +2386,8 @@ async function bootstrap() {
     } else {
       modelSelect.value = getSelectedModelPref();
     }
+    lastModelSelectValue = modelSelect.value;
+    void refreshModelCacheIndicators();
 
     const setupDone = await getPreference('setup_complete');
     if (setupDone !== '1') {
@@ -2275,6 +2396,9 @@ async function bootstrap() {
       statusText.textContent = 'Starting…';
       try {
         await initAI(getSelectedModelPref());
+        const loadedId = getActiveModelId();
+        if (loadedId) modelCacheStatus[loadedId] = true;
+        await refreshModelCacheIndicators();
       } catch (err) {
         console.error('[ERROR]', err);
         showToast('Model failed to load — try a smaller model in the header');
