@@ -833,12 +833,96 @@ html[data-theme="dark"] .brand-tagline {
 
 .panel-side {
   display: flex;
+  flex-direction: column;
 }
 
 .panel-header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.panel-lang-select {
+  max-width: 148px;
+  font-size: 0.78rem;
+}
+
+.panel-lang-select option.lang-tier-hint {
+  font-style: italic;
+  color: var(--text-light);
+}
+
+.panel-update-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+}
+
+.panel-fixing[hidden] {
+  display: none !important;
+}
+
+.panel-fixing {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+  backdrop-filter: blur(2px);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.panel-fixing-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: panel-fixing-spin 0.75s linear infinite;
+}
+
+@keyframes panel-fixing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.panel-fixing-dots span {
+  animation: panel-fixing-dot 1.2s infinite;
+  opacity: 0.25;
+}
+
+.panel-fixing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.panel-fixing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes panel-fixing-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.panel-update-body .corrected-output {
+  flex: 1;
+  min-height: 360px;
 }
 
 .focus-btn[aria-pressed="true"] {
@@ -1367,6 +1451,24 @@ html[data-theme="dark"] .app.focus-mode::after {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.setup-options-split {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.setup-options-split .setup-option {
+  flex: 1;
+  min-width: 0;
+}
+
+.setup-field-label {
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text);
 }
 
 .setup-option {

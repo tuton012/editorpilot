@@ -666,3 +666,237 @@ export async function analyzeGrammarIssues(text, requestId) {
 export function getCurrentModelId() {
   return currentModelId;
 }
+
+export function getActiveModelId() {
+  return currentModelId || resolveModelId(selectedModelPref);
+}
+
+export function isSmallTierModel(modelId = getActiveModelId()) {
+  if (!modelId) return true;
+  return modelId.includes('0.5B') || modelId.includes('1.5B');
+}
+
+/** Output / translation targets for the Updated Version panel. */
+export const OUTPUT_LANGUAGES = [
+  { id: 'english', label: 'English' },
+  { id: 'auto', label: 'Auto-detect' },
+  { id: 'spanish', label: 'Spanish' },
+  { id: 'french', label: 'French' },
+  { id: 'german', label: 'German' },
+  { id: 'portuguese', label: 'Portuguese' },
+  { id: 'italian', label: 'Italian' },
+  { id: 'dutch', label: 'Dutch' },
+  { id: 'chinese', label: 'Chinese' },
+  { id: 'japanese', label: 'Japanese' },
+  { id: 'korean', label: 'Korean' },
+  { id: 'arabic', label: 'Arabic' },
+  { id: 'hindi', label: 'Hindi' },
+  { id: 'russian', label: 'Russian' },
+  { id: 'polish', label: 'Polish' },
+];
+
+export const SMALL_MODEL_LANGUAGES = new Set(['english', 'auto', 'spanish']);
+
+const TRANSLATION_LABELS = Object.fromEntries(
+  OUTPUT_LANGUAGES.filter((l) => l.id !== 'auto').map((l) => [l.id, l.label])
+);
+
+const CORRECTION_BATCH_SIZE = 3500;
+
+const LANGUAGE_HINTS = [
+  { id: 'spanish', re: /[¿¡ñáéíóúü]/i, words: /\b(el|la|los|las|que|de|en|un|una|por|con|para|es|está|como|pero|más|muy|también|qué|hola|gracias)\b/i },
+  { id: 'french', re: /[àâçéèêëîïôùûü]/i, words: /\b(le|la|les|de|des|un|une|et|est|dans|pour|que|qui|avec|pas|plus|très|bonjour|merci)\b/i },
+  { id: 'german', re: /[äöüß]/i, words: /\b(der|die|das|und|ist|in|den|von|zu|mit|sich|auf|für|nicht|auch|ein|eine|ich|wir)\b/i },
+  { id: 'portuguese', re: /[ãõáéíóúç]/i, words: /\b(o|a|os|as|de|que|em|um|uma|para|com|não|por|mais|como|muito|obrigado|olá)\b/i },
+  { id: 'italian', re: /[àèéìíîòóùú]/i, words: /\b(il|lo|la|i|gli|le|di|che|e|un|una|per|con|non|più|come|molto|ciao|grazie)\b/i },
+  { id: 'dutch', re: /[ëï]/i, words: /\b(de|het|een|en|van|in|is|dat|op|te|voor|met|niet|zijn|ook|als|maar)\b/i },
+  { id: 'chinese', re: /[\u4e00-\u9fff]/ },
+  { id: 'japanese', re: /[\u3040-\u30ff\u4e00-\u9fff]/ },
+  { id: 'korean', re: /[\uac00-\ud7af]/ },
+  { id: 'arabic', re: /[\u0600-\u06ff]/ },
+  { id: 'hindi', re: /[\u0900-\u097f]/ },
+  { id: 'russian', re: /[\u0400-\u04ff]/ },
+  { id: 'polish', re: /[ąćęłńóśźż]/i, words: /\b(i|w|na|z|do|nie|to|jest|się|że|od|jak|ale|czy|też|dla)\b/i },
+];
+
+/** Lightweight language guess for auto-detect and translation routing. */
+export function detectLanguageHeuristic(text) {
+  if (!text || text.length < MIN_TEXT_LENGTH) return 'english';
+
+  const sample = text.slice(0, 4000);
+  let best = 'english';
+  let bestScore = 0;
+
+  for (const hint of LANGUAGE_HINTS) {
+    let score = 0;
+    if (hint.re?.test(sample)) score += 3;
+    if (hint.words) {
+      const hits = sample.match(new RegExp(hint.words.source, 'gi'));
+      score += Math.min(6, hits?.length || 0);
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = hint.id;
+    }
+  }
+
+  return bestScore >= 2 ? best : 'english';
+}
+
+export function splitTextIntoBatches(text, maxChunk = CORRECTION_BATCH_SIZE) {
+  if (!text) return [];
+  if (text.length <= maxChunk) return [text];
+
+  const batches = [];
+  const parts = text.split(/(\n\n+)/);
+  let current = '';
+
+  for (const part of parts) {
+    if (!part) continue;
+
+    if ((current + part).length <= maxChunk) {
+      current += part;
+      continue;
+    }
+
+    if (current.trim()) {
+      batches.push(current);
+      current = '';
+    }
+
+    if (part.length <= maxChunk) {
+      current = part;
+      continue;
+    }
+
+    for (let i = 0; i < part.length; i += maxChunk) {
+      batches.push(part.slice(i, i + maxChunk));
+    }
+  }
+
+  if (current.trim()) batches.push(current);
+  return batches.length ? batches : [text];
+}
+
+export function resolveCorrectionMode(styleMode, text, outputLang) {
+  const detected = detectLanguageHeuristic(text);
+  const mode = STYLE_MODES.has(styleMode) ? styleMode : 'grammar';
+
+  if (outputLang === 'auto') {
+    if (mode === 'grammar' && LANGUAGE_MODES.has(detected)) return detected;
+    return mode;
+  }
+
+  if (mode === 'grammar' && LANGUAGE_MODES.has(detected)) {
+    return detected;
+  }
+
+  return mode;
+}
+
+export function resolveTranslationTarget(outputLang, text) {
+  if (!outputLang || outputLang === 'auto') return null;
+
+  const detected = detectLanguageHeuristic(text);
+  if (outputLang === detected) return null;
+
+  if (outputLang === 'english' && detected === 'english') return null;
+
+  return outputLang;
+}
+
+function getTranslationMessages(targetLang, text) {
+  const label = TRANSLATION_LABELS[targetLang] || 'English';
+  return {
+    system:
+      'You are a professional translator. Output ONLY the translated text. ' +
+      'Never repeat instructions, labels, or explanations. No markdown fences.',
+    user: `Translate the following text into ${label}. Preserve meaning, names, numbers, and links.\n\n${text}`,
+  };
+}
+
+async function generateTranslation(targetLang, text, requestId, options = {}) {
+  if (!text || isStale(requestId)) return null;
+
+  const { maxTokens = tokenBudget(text, 1024), temperature = 0.15 } = options;
+  const { system, user } = getTranslationMessages(targetLang, text);
+
+  const reply = await engine.chat.completions.create({
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature,
+    max_tokens: maxTokens,
+  });
+
+  if (isStale(requestId)) return null;
+
+  return cleanAIOutput(reply?.choices?.[0]?.message?.content || '') || text;
+}
+
+/**
+ * Correct (and optionally translate) text in batches — no length cap.
+ * onProgress({ phase: 'fixing'|'translating', batch, total })
+ */
+export async function runCorrectionPipeline(styleMode, text, outputLang, requestId, onProgress) {
+  if (!text || text.length < MIN_TEXT_LENGTH) return '';
+
+  return runExclusive(requestId, async () => {
+    try {
+      await initAI();
+    } catch (err) {
+      console.error('[ERROR]', err);
+      return null;
+    }
+    if (isStale(requestId) || !engine || !isReady) return null;
+
+    const correctionMode = resolveCorrectionMode(styleMode, text, outputLang);
+    const batches = splitTextIntoBatches(text);
+    const correctedParts = [];
+
+    console.log('[AI] Correction started', { batches: batches.length, mode: correctionMode });
+
+    for (let i = 0; i < batches.length; i++) {
+      if (isStale(requestId)) return null;
+      onProgress?.({ phase: 'fixing', batch: i + 1, total: batches.length });
+
+      const chunk = batches[i];
+      const result = await generateCorrection(correctionMode, chunk, requestId, {
+        maxTokens: tokenBudget(chunk, 1536),
+        temperature: 0.1,
+      });
+
+      if (isStale(requestId)) return null;
+      correctedParts.push(result || chunk);
+    }
+
+    let merged = correctedParts.join('');
+
+    const translateTarget = resolveTranslationTarget(outputLang, text);
+    if (translateTarget) {
+      const translateBatches = splitTextIntoBatches(merged);
+      const translatedParts = [];
+
+      for (let i = 0; i < translateBatches.length; i++) {
+        if (isStale(requestId)) return null;
+        onProgress?.({ phase: 'translating', batch: i + 1, total: translateBatches.length });
+
+        const chunk = translateBatches[i];
+        const translated = await generateTranslation(translateTarget, chunk, requestId, {
+          maxTokens: tokenBudget(chunk, 1536),
+          temperature: 0.15,
+        });
+
+        if (isStale(requestId)) return null;
+        translatedParts.push(translated || chunk);
+      }
+
+      merged = translatedParts.join('');
+    }
+
+    console.log('[AI] Correction complete');
+    emitStatus('Ready', 'ready');
+    return merged;
+  });
+}

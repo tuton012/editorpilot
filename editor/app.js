@@ -5,7 +5,7 @@
 import {
   initAI,
   setStatusCallback,
-  runCorrection,
+  runCorrectionPipeline,
   runRewriteVariants,
   analyzeGrammarIssues,
   analyzeGrammarIssuesLocal,
@@ -14,6 +14,10 @@ import {
   switchModel,
   getSelectedModelPref,
   setSelectedModelPref,
+  getActiveModelId,
+  isSmallTierModel,
+  isAIReady,
+  detectLanguageHeuristic,
   GEMMA_MODEL_ID,
   APP_NAME,
   MIN_TEXT_LENGTH,
@@ -23,6 +27,8 @@ import {
   MODE_LABELS,
   LANGUAGE_MODES,
   STYLE_MODES,
+  OUTPUT_LANGUAGES,
+  SMALL_MODEL_LANGUAGES,
 } from './ai.js';
 
 import { computeWritingScores } from './scores.js';
@@ -53,6 +59,8 @@ const DEBOUNCE_MS = 800;
 const HIGHLIGHT_DEBOUNCE_MS = 2500;
 const AUTOSAVE_MS = 2000;
 const MAX_UNDO = 40;
+const VERSION_STORAGE_KEY = 'editorpilot_app_version';
+const CORRECTION_BATCH_HINT = 3500;
 
 const LEGAL_CONTENT = {
   shortcuts: {
@@ -60,7 +68,7 @@ const LEGAL_CONTENT = {
     html: `<table class="shortcuts-table">
       <tr><td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Undo last change</td></tr>
       <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></td><td>Toggle Focus mode</td></tr>
-      <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td><td>Copy Update panel</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td><td>Copy Updated Version panel</td></tr>
       <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td><td>Open Rewrite options</td></tr>
       <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></td><td>Toggle Compare view</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Exit Focus · close modals</td></tr>
@@ -143,7 +151,10 @@ const popupSuggestion = document.getElementById('popup-suggestion');
 const popupExplanation = document.getElementById('popup-explanation');
 const btnDarkToggle = document.getElementById('btn-dark-toggle');
 const themeSelect = document.getElementById('theme-select');
-const languageModeSelect = document.getElementById('language-mode');
+const outputLanguageSelect = document.getElementById('output-language');
+const panelFixing = document.getElementById('panel-fixing');
+const panelFixingText = panelFixing?.querySelector('.panel-fixing-text');
+const footerCopy = document.getElementById('footer-copy');
 const toast = document.getElementById('toast');
 const modalOverlay = document.getElementById('modal-overlay');
 const modalTitle = document.getElementById('modal-title');
@@ -194,6 +205,8 @@ let currentRequestId = 0;
 let darkMode = false;
 let colorTheme = 'light-default';
 let styleMode = 'grammar';
+let outputLanguage = 'english';
+let correctionRerunPending = false;
 let undoStack = [];
 let undoPaused = false;
 let editorFormat = {
@@ -352,8 +365,9 @@ function toggleCompareMode() {
 
 function refreshUpdatePanel() {
   if (!correctedText) {
-    correctedOutput.textContent = 'Updated version will appear here…';
+    correctedOutput.textContent = 'Updated preview will display here once you start writing.';
     correctedOutput.classList.add('empty');
+    setFixing(false);
     return;
   }
 
@@ -487,19 +501,151 @@ function undoLastChange() {
   showToast('Undone');
 }
 
-// ---- Model lock for non-English languages ----
+// ---- Version manager ----
 
-function isNonEnglishMode() {
-  return LANGUAGE_MODES.has(currentMode) || Boolean(languageModeSelect.value);
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const av = pa[i] || 0;
+    const bv = pb[i] || 0;
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+  }
+  return 0;
+}
+
+function formatFooterVersion(version) {
+  const label = version.startsWith('V') ? version : `V${version}`;
+  return `© EditorPilot · editorpilot.com · Carlos I - ${label}`;
+}
+
+function updateFooterVersion(version) {
+  if (!footerCopy || !version) return;
+  footerCopy.innerHTML =
+    `${formatFooterVersion(version).replace('editorpilot.com', '<a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a>')}`;
+}
+
+async function clearAppCachesForUpdate() {
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((reg) => reg.unregister()));
+  }
+}
+
+async function checkAppVersion() {
+  try {
+    const res = await fetch('./version.json', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const version = data?.version;
+    if (!version) return null;
+
+    updateFooterVersion(version);
+
+    const stored = localStorage.getItem(VERSION_STORAGE_KEY);
+    if (stored && compareVersions(stored, version) < 0) {
+      localStorage.setItem(VERSION_STORAGE_KEY, version);
+      await clearAppCachesForUpdate();
+      window.location.reload();
+      return null;
+    }
+
+    localStorage.setItem(VERSION_STORAGE_KEY, version);
+    return version;
+  } catch (err) {
+    console.warn('[VERSION] Could not check version.json', err);
+    return null;
+  }
+}
+
+// ---- Output language & model tier ----
+
+function needsMultilingualModel(lang = outputLanguage) {
+  if (!lang || SMALL_MODEL_LANGUAGES.has(lang)) {
+    if (lang === 'auto') {
+      const detected = detectLanguageHeuristic(syncEditorPlainText());
+      return !SMALL_MODEL_LANGUAGES.has(detected) && detected !== 'english';
+    }
+    return false;
+  }
+  return true;
+}
+
+function syncOutputLanguageOptions() {
+  if (!outputLanguageSelect) return;
+
+  const small = isSmallTierModel(getActiveModelId());
+  outputLanguageSelect.querySelectorAll('option').forEach((opt) => {
+    if (opt.classList.contains('lang-tier-hint') || opt.value === '') return;
+    const allowed = !small || SMALL_MODEL_LANGUAGES.has(opt.value);
+    opt.disabled = !allowed;
+    opt.hidden = false;
+  });
+
+  if (small && needsMultilingualModel(outputLanguageSelect.value)) {
+    outputLanguage = 'english';
+    outputLanguageSelect.value = 'english';
+    setPreference('output_language', outputLanguage).catch((err) => console.error('[ERROR]', err));
+  }
+}
+
+function setOutputLanguage(lang) {
+  if (!lang || !OUTPUT_LANGUAGES.some((l) => l.id === lang)) {
+    lang = 'english';
+  }
+
+  if (isSmallTierModel(getActiveModelId()) && !SMALL_MODEL_LANGUAGES.has(lang)) {
+    showToast('That language needs Gemma 2 9B or a higher tier model');
+    outputLanguageSelect.value = outputLanguage;
+    return;
+  }
+
+  outputLanguage = lang;
+  outputLanguageSelect.value = lang;
+  syncModelForLanguage();
+  setPreference('output_language', lang).catch((err) => console.error('[ERROR]', err));
+  scheduleDebouncedAI();
+  scheduleAutosave();
+}
+
+function setFixing(show, message) {
+  if (!panelFixing) return;
+
+  if (show) {
+    panelFixing.hidden = false;
+    if (panelFixingText) {
+      const dotsHtml = '<span class="panel-fixing-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
+      const label = message || 'Fixing';
+      panelFixingText.innerHTML = `${escapeHtml(label)}${dotsHtml}`;
+    }
+    return;
+  }
+
+  panelFixing.hidden = true;
+}
+
+function onCorrectionProgress({ phase, batch, total }) {
+  if (total <= 1) {
+    setFixing(true, phase === 'translating' ? 'Translating' : 'Fixing');
+    return;
+  }
+  const label = phase === 'translating' ? 'Translating' : 'Fixing';
+  setFixing(true, `${label} (${batch}/${total})`);
 }
 
 function syncModelForLanguage() {
-  const nonEnglish = isNonEnglishMode();
-  const englishOptions = ['auto', 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC', 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC'];
+  syncOutputLanguageOptions();
+
+  const needsGemma = needsMultilingualModel();
 
   modelSelect.querySelectorAll('option').forEach((opt) => {
     const isGemma = opt.value === GEMMA_MODEL_ID;
-    if (nonEnglish) {
+    if (needsGemma) {
       opt.hidden = !isGemma;
       opt.disabled = !isGemma;
     } else {
@@ -508,12 +654,12 @@ function syncModelForLanguage() {
     }
   });
 
-  if (nonEnglish && modelSelect.value !== GEMMA_MODEL_ID) {
+  if (needsGemma && modelSelect.value !== GEMMA_MODEL_ID) {
     modelSelect.value = GEMMA_MODEL_ID;
     setSelectedModelPref(GEMMA_MODEL_ID);
     switchModel(GEMMA_MODEL_ID).catch((err) => console.error('[ERROR]', err));
     setPreference('selected_model', GEMMA_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    showToast('Non-English languages use Gemma 2 9B');
+    showToast('This language uses Gemma 2 9B');
   }
 }
 
@@ -585,31 +731,18 @@ function showLegalModal(key) {
 // ---- Mode selection ----
 
 function syncModeUI() {
-  const isLanguage = LANGUAGE_MODES.has(currentMode);
-
   document.querySelectorAll('.mode-btn').forEach((btn) => {
-    btn.classList.toggle('active', !isLanguage && btn.dataset.mode === currentMode);
+    btn.classList.toggle('active', btn.dataset.mode === currentMode);
   });
-
-  if (isLanguage) {
-    languageModeSelect.value = currentMode;
-  } else if (LANGUAGE_MODES.has(languageModeSelect.value)) {
-    languageModeSelect.value = '';
-  } else {
-    languageModeSelect.value = '';
-  }
 }
 
 function setMode(mode) {
-  if (!STYLE_MODES.has(mode) && !LANGUAGE_MODES.has(mode)) {
+  if (!STYLE_MODES.has(mode)) {
     mode = 'grammar';
   }
   currentMode = mode;
-  if (STYLE_MODES.has(mode)) {
-    styleMode = mode;
-  }
+  styleMode = mode;
   syncModeUI();
-  syncModelForLanguage();
   setPreference('last_mode', mode).catch((err) => console.error('[ERROR]', err));
   scheduleDebouncedAI();
   scheduleAutosave();
@@ -620,14 +753,14 @@ function setChecking(show) {
 }
 
 function updateLengthWarning(text) {
-  if (text.length > MAX_CORRECTION_LENGTH) {
+  if (text.length > MAX_HIGHLIGHT_LENGTH) {
     lengthWarning.hidden = false;
     lengthWarning.textContent =
-      `Text is ${text.length.toLocaleString()} characters. Live updates pause above ${MAX_CORRECTION_LENGTH.toLocaleString()} characters — shorten the text to continue.`;
-  } else if (text.length > MAX_HIGHLIGHT_LENGTH) {
+      `Grammar highlighting is limited above ${MAX_HIGHLIGHT_LENGTH.toLocaleString()} characters. Long documents are corrected in batches — updates may take longer.`;
+  } else if (text.length > CORRECTION_BATCH_HINT) {
     lengthWarning.hidden = false;
     lengthWarning.textContent =
-      `Grammar highlighting is limited above ${MAX_HIGHLIGHT_LENGTH.toLocaleString()} characters. Updates still run.`;
+      'Long text is processed in batches. The Updated Version may take a little longer to refresh.';
   } else {
     lengthWarning.hidden = true;
   }
@@ -923,44 +1056,83 @@ async function copyPanelText(text, label) {
   }
 }
 
-/** Live path: mode-based update. */
+/** Live path: style correction + optional translation (batched, no length cap). */
 async function runCorrectionOnly(text, requestId) {
   if (!text || text.length < MIN_TEXT_LENGTH) {
     correctedText = '';
     updateNewUpdatePanel('');
     updateScores(text);
+    setFixing(false);
     return;
   }
 
-  if (aiTaskRunning) return;
+  if (requestId !== getRequestGeneration()) {
+    return;
+  }
+
+  if (aiTaskRunning) {
+    correctionRerunPending = true;
+    return;
+  }
+
   aiTaskRunning = true;
   setChecking(true);
+  setFixing(true);
 
   try {
-    if (text.length <= MAX_CORRECTION_LENGTH) {
-      const modeFixed = await runCorrection(currentMode, text, requestId);
-
-      if (requestId === currentRequestId && modeFixed !== null) {
-        correctedText = modeFixed;
-        updateNewUpdatePanel(correctedText);
-      }
-
-      if (requestId === currentRequestId) {
-        updateScores(text);
+    if (!isAIReady()) {
+      try {
+        await initAI(getSelectedModelPref());
+      } catch (err) {
+        console.error('[ERROR]', err);
+        showToast('Model still loading — try again in a moment');
+        return;
       }
     }
+
+    if (requestId !== getRequestGeneration()) {
+      return;
+    }
+
+    const modeFixed = await runCorrectionPipeline(
+      currentMode,
+      text,
+      outputLanguage,
+      requestId,
+      onCorrectionProgress
+    );
+
+    if (requestId !== getRequestGeneration()) {
+      return;
+    }
+
+    if (modeFixed !== null) {
+      correctedText = modeFixed;
+      updateNewUpdatePanel(correctedText);
+    }
+
+    updateScores(text);
   } catch (err) {
     console.error('[ERROR]', err);
+    showToast('Could not update — try again');
   } finally {
     aiTaskRunning = false;
     setChecking(false);
+    setFixing(false);
+
+    if (correctionRerunPending) {
+      correctionRerunPending = false;
+      const latest = syncEditorPlainText();
+      const reqId = getRequestGeneration();
+      if (latest.length >= MIN_TEXT_LENGTH) {
+        queueMicrotask(() => runCorrectionOnly(latest, reqId));
+      }
+    }
   }
 }
 
 function scheduleDebouncedAI() {
   clearTimeout(debounceTimer);
-  bumpRequestGeneration();
-  currentRequestId = getRequestGeneration();
 
   const text = syncEditorPlainText();
   updateLengthWarning(text);
@@ -970,14 +1142,21 @@ function scheduleDebouncedAI() {
   updateDocStats(text);
 
   if (text.length < MIN_TEXT_LENGTH) {
+    bumpRequestGeneration();
+    currentRequestId = getRequestGeneration();
     correctedText = '';
     updateNewUpdatePanel('');
-    updateScores(text);
+    setFixing(false);
+    setChecking(false);
     return;
   }
 
+  bumpRequestGeneration();
+  currentRequestId = getRequestGeneration();
   const reqId = currentRequestId;
+
   debounceTimer = setTimeout(() => {
+    if (getRequestGeneration() !== reqId) return;
     runCorrectionOnly(syncEditorPlainText(), reqId);
   }, DEBOUNCE_MS);
 }
@@ -1073,7 +1252,14 @@ async function loadDraft(id, { silent = false } = {}) {
     if (!doc) return;
 
     currentDocId = doc.id;
-    currentMode = doc.mode || 'grammar';
+    let savedMode = doc.mode || 'grammar';
+    if (LANGUAGE_MODES.has(savedMode)) {
+      outputLanguage = savedMode;
+      outputLanguageSelect.value = savedMode;
+      savedMode = 'grammar';
+    }
+    currentMode = STYLE_MODES.has(savedMode) ? savedMode : 'grammar';
+    styleMode = currentMode;
     correctedText = doc.corrected_text || '';
 
     setEditorPlainText(doc.original_text || '');
@@ -1096,11 +1282,15 @@ async function loadDraft(id, { silent = false } = {}) {
 }
 
 function setActiveModeButton(mode) {
-  currentMode = mode;
-  if (STYLE_MODES.has(mode)) {
-    styleMode = mode;
+  if (LANGUAGE_MODES.has(mode)) {
+    outputLanguage = mode;
+    outputLanguageSelect.value = mode;
+    mode = 'grammar';
   }
+  currentMode = STYLE_MODES.has(mode) ? mode : 'grammar';
+  styleMode = currentMode;
   syncModeUI();
+  syncModelForLanguage();
 }
 
 // ---- Backup / import ----
@@ -1226,10 +1416,27 @@ let setupStep = 0;
 const SETUP_STEPS = 4;
 let setupDraft = {
   mode: 'grammar',
-  language: '',
+  outputLanguage: 'english',
   colorTheme: 'light-default',
   darkMode: false,
 };
+let setupAppearanceSnapshot = null;
+
+function applySetupPreview() {
+  const theme = setupDraft.darkMode ? 'dark' : setupDraft.colorTheme;
+  document.documentElement.dataset.theme = theme;
+}
+
+function captureSetupAppearanceSnapshot() {
+  setupAppearanceSnapshot = { darkMode, colorTheme };
+}
+
+function restoreSetupAppearanceSnapshot() {
+  if (!setupAppearanceSnapshot) return;
+  darkMode = setupAppearanceSnapshot.darkMode;
+  colorTheme = setupAppearanceSnapshot.colorTheme;
+  applyAppearance();
+}
 
 function renderSetupStep() {
   setupProgress.textContent = `Step ${setupStep + 1} of ${SETUP_STEPS}`;
@@ -1246,7 +1453,7 @@ function renderSetupStep() {
 
   if (setupStep === 1) {
     setupTitle.textContent = 'How should AI fix your writing?';
-    setupMessage.textContent = 'Pick a default style and optional language.';
+    setupMessage.textContent = 'Pick a default style and output language for the Updated Version panel.';
     setupBody.innerHTML = `
       <div class="setup-field">
         <label for="setup-mode">Correction style</label>
@@ -1263,9 +1470,10 @@ function renderSetupStep() {
         </select>
       </div>
       <div class="setup-field">
-        <label for="setup-language">Language (optional)</label>
+        <label for="setup-language">Output language</label>
         <select id="setup-language" class="mode-select">
-          <option value="">English (default)</option>
+          <option value="english">English</option>
+          <option value="auto">Auto-detect</option>
           <option value="spanish">Spanish</option>
           <option value="french">French</option>
           <option value="german">German</option>
@@ -1284,9 +1492,7 @@ function renderSetupStep() {
     document.getElementById('setup-mode').value = STYLE_MODES.has(setupDraft.mode)
       ? setupDraft.mode
       : 'grammar';
-    document.getElementById('setup-language').value = LANGUAGE_MODES.has(setupDraft.mode)
-      ? setupDraft.mode
-      : setupDraft.language || '';
+    document.getElementById('setup-language').value = setupDraft.outputLanguage || 'english';
     return;
   }
 
@@ -1309,26 +1515,34 @@ function renderSetupStep() {
         </select>
       </div>
       <div class="setup-field">
-        <label class="setup-options">
+        <span class="setup-field-label">Appearance</span>
+        <div class="setup-options setup-options-split">
           <button type="button" class="setup-option ${setupDraft.darkMode ? 'selected' : ''}" id="setup-dark-opt" data-value="dark">
             <div><strong>Dark mode</strong><span>Easier on eyes at night</span></div>
           </button>
           <button type="button" class="setup-option ${!setupDraft.darkMode ? 'selected' : ''}" id="setup-light-opt" data-value="light">
             <div><strong>Light mode</strong><span>Uses the color theme above</span></div>
           </button>
-        </label>
+        </div>
       </div>`;
     document.getElementById('setup-theme').value = setupDraft.colorTheme;
+    document.getElementById('setup-theme').addEventListener('change', (e) => {
+      setupDraft.colorTheme = e.target.value;
+      applySetupPreview();
+    });
     document.getElementById('setup-dark-opt').addEventListener('click', () => {
       setupDraft.darkMode = true;
       document.getElementById('setup-dark-opt').classList.add('selected');
       document.getElementById('setup-light-opt').classList.remove('selected');
+      applySetupPreview();
     });
     document.getElementById('setup-light-opt').addEventListener('click', () => {
       setupDraft.darkMode = false;
       document.getElementById('setup-light-opt').classList.add('selected');
       document.getElementById('setup-dark-opt').classList.remove('selected');
+      applySetupPreview();
     });
+    applySetupPreview();
     return;
   }
 
@@ -1338,20 +1552,25 @@ function renderSetupStep() {
     setupBody.innerHTML = `
       <ul class="setup-guide-list">
         <li><strong>Focus</strong> — Dim everything and write full width (button on Write Here)</li>
+        <li><strong>Offline use</strong> — Install the app from your browser first; wait for the model to finish downloading before going offline</li>
         <li><strong>Export</strong> — Download all drafts & settings as a backup file</li>
         <li><strong>Import</strong> — Restore from a backup (replaces local data)</li>
         <li><strong>Delete All</strong> — Erase everything on this device</li>
         <li><strong>Change model</strong> — Pick a local model in the header (cached after first load)</li>
       </ul>`;
   }
+
+  if (setupStep >= 2) {
+    applySetupPreview();
+  }
 }
 
 function collectSetupStep() {
   if (setupStep === 1) {
-    const lang = document.getElementById('setup-language')?.value;
+    const lang = document.getElementById('setup-language')?.value || 'english';
     const mode = document.getElementById('setup-mode')?.value || 'grammar';
-    setupDraft.language = lang || '';
-    setupDraft.mode = lang || mode;
+    setupDraft.outputLanguage = lang;
+    setupDraft.mode = mode;
   }
   if (setupStep === 2) {
     setupDraft.colorTheme = document.getElementById('setup-theme')?.value || 'light-default';
@@ -1367,8 +1586,10 @@ async function finishSetup() {
   await saveAppearancePrefs();
 
   setMode(setupDraft.mode);
+  setOutputLanguage(setupDraft.outputLanguage || 'english');
 
   await setPreference('setup_complete', '1');
+  setupAppearanceSnapshot = null;
   setupOverlay.hidden = true;
   showToast('Welcome to EditorPilot');
 }
@@ -1378,10 +1599,11 @@ function openSetupWizard(resetStep = false) {
     setupStep = 0;
     setupDraft = {
       mode: currentMode,
-      language: LANGUAGE_MODES.has(currentMode) ? currentMode : '',
+      outputLanguage,
       colorTheme,
       darkMode,
     };
+    captureSetupAppearanceSnapshot();
   }
   renderSetupStep();
   setupOverlay.hidden = false;
@@ -1391,6 +1613,8 @@ async function closeSetupWizard() {
   if (setupStep > 0) {
     collectSetupStep();
   }
+  restoreSetupAppearanceSnapshot();
+  setupAppearanceSnapshot = null;
   await setPreference('setup_complete', '1').catch((err) => console.error('[ERROR]', err));
   setupOverlay.hidden = true;
 }
@@ -1409,6 +1633,9 @@ function bindSetupWizard() {
   setupBack.addEventListener('click', () => {
     if (setupStep > 0) {
       collectSetupStep();
+      if (setupStep === 2) {
+        restoreSetupAppearanceSnapshot();
+      }
       setupStep--;
       renderSetupStep();
     }
@@ -1571,13 +1798,8 @@ function bindEvents() {
     });
   });
 
-  languageModeSelect.addEventListener('change', () => {
-    const lang = languageModeSelect.value;
-    if (lang) {
-      setMode(lang);
-    } else {
-      setMode(styleMode || 'grammar');
-    }
+  outputLanguageSelect.addEventListener('change', () => {
+    setOutputLanguage(outputLanguageSelect.value);
   });
 
   btnFocusMode.addEventListener('click', () => {
@@ -1680,9 +1902,10 @@ function bindEvents() {
   });
 
   modelSelect.addEventListener('change', async () => {
-    if (isNonEnglishMode() && modelSelect.value !== GEMMA_MODEL_ID) {
+    syncOutputLanguageOptions();
+    if (needsMultilingualModel() && modelSelect.value !== GEMMA_MODEL_ID) {
       modelSelect.value = GEMMA_MODEL_ID;
-      showToast('Non-English languages use Gemma 2 9B only');
+      showToast('This language uses Gemma 2 9B only');
       return;
     }
     const pref = modelSelect.value;
@@ -1691,6 +1914,7 @@ function bindEvents() {
     modelSelect.disabled = true;
     try {
       await switchModel(pref);
+      syncOutputLanguageOptions();
       scheduleDebouncedAI();
       showToast('Model changed');
     } catch (err) {
@@ -1733,9 +1957,12 @@ function bindEvents() {
 // ---- Bootstrap ----
 
 async function bootstrap() {
+  await checkAppVersion();
+
   bindEvents();
   bindPwaInstall();
   bindSetupWizard();
+  setFixing(false);
   updateNewUpdatePanel('');
   updateDocStats('');
 
@@ -1747,6 +1974,12 @@ async function bootstrap() {
     ignored.forEach((row) => {
       ignoredPatterns.add(`${row.original_text}::${row.suggestion}`);
     });
+
+    const savedOutputLang = await getPreference('output_language');
+    if (savedOutputLang && OUTPUT_LANGUAGES.some((l) => l.id === savedOutputLang)) {
+      outputLanguage = savedOutputLang;
+      outputLanguageSelect.value = savedOutputLang;
+    }
 
     const savedMode = await getPreference('last_mode');
     if (savedMode) {

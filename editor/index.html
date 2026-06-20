@@ -96,24 +96,6 @@
             <button type="button" class="mode-btn" data-mode="formal">Formal</button>
             <button type="button" class="mode-btn" data-mode="casual">Casual</button>
           </div>
-          <span class="mode-divider" aria-hidden="true"></span>
-          <label class="mode-label" for="language-mode">Language:</label>
-          <select id="language-mode" class="mode-select" title="Correct grammar in another language">
-            <option value="">English (default)</option>
-            <option value="spanish">Spanish</option>
-            <option value="french">French</option>
-            <option value="german">German</option>
-            <option value="portuguese">Portuguese</option>
-            <option value="italian">Italian</option>
-            <option value="dutch">Dutch</option>
-            <option value="chinese">Chinese</option>
-            <option value="japanese">Japanese</option>
-            <option value="korean">Korean</option>
-            <option value="arabic">Arabic</option>
-            <option value="hindi">Hindi</option>
-            <option value="russian">Russian</option>
-            <option value="polish">Polish</option>
-          </select>
         </div>
 
         <div class="action-bar">
@@ -194,16 +176,41 @@
             </div>
           </section>
 
-          <section class="panel card panel-side panel-update" id="panel-update" aria-label="Update">
+          <section class="panel card panel-side panel-update" id="panel-update" aria-label="Updated Version">
             <div class="panel-header">
-              <h2>Update</h2>
+              <h2>Updated Version</h2>
               <div class="panel-header-actions">
+                <label class="visually-hidden" for="output-language">Output language</label>
+                <select id="output-language" class="format-select panel-lang-select" title="Output language">
+                  <option value="english">English</option>
+                  <option value="auto">Auto-detect</option>
+                  <option value="spanish">Spanish</option>
+                  <option value="french">French</option>
+                  <option value="german">German</option>
+                  <option value="portuguese">Portuguese</option>
+                  <option value="italian">Italian</option>
+                  <option value="dutch">Dutch</option>
+                  <option value="chinese">Chinese</option>
+                  <option value="japanese">Japanese</option>
+                  <option value="korean">Korean</option>
+                  <option value="arabic">Arabic</option>
+                  <option value="hindi">Hindi</option>
+                  <option value="russian">Russian</option>
+                  <option value="polish">Polish</option>
+                  <option value="" disabled class="lang-tier-hint">unlock more languages by changing the model to a higher tier</option>
+                </select>
                 <button type="button" class="btn btn-sm" id="btn-compare" aria-pressed="false">Compare</button>
                 <button type="button" class="btn btn-sm" id="btn-rewrite">Rewrite</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-copy-update">Copy</button>
               </div>
             </div>
-            <div id="corrected-output" class="corrected-output" aria-live="polite"></div>
+            <div class="panel-update-body">
+              <div id="panel-fixing" class="panel-fixing" hidden aria-live="polite">
+                <span class="panel-fixing-spinner" aria-hidden="true"></span>
+                <span class="panel-fixing-text">Fixing<span class="panel-fixing-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></span>
+              </div>
+              <div id="corrected-output" class="corrected-output" aria-live="polite"></div>
+            </div>
           </section>
         </div>
       </main>
@@ -221,7 +228,7 @@
         <span class="footer-sep" aria-hidden="true">·</span>
         <button type="button" class="footer-link" data-legal="shortcuts">Shortcuts</button>
       </nav>
-      <p class="footer-copy">© EditorPilot · <a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a> · Carlos I</p>
+      <p class="footer-copy" id="footer-copy">© EditorPilot · <a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a> · Carlos I</p>
     </footer>
   </div>
 

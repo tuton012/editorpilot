@@ -1,7 +1,7 @@
 /*! EditorPilot service worker — COOP/COEP + offline PWA cache */
 let coepCredentialless = true;
 
-const CACHE_VERSION = 'editorpilot-pwa-v1';
+const CACHE_VERSION = 'editorpilot-pwa-v2';
 
 const PRECACHE_URLS = [
   './',
@@ -14,6 +14,7 @@ const PRECACHE_URLS = [
   './scores.js',
   './logo.png',
   './manifest.webmanifest',
+  './version.json',
   './coi-config.js',
   './vendor/sqlite-wasm/index.mjs',
   './vendor/sqlite-wasm/sqlite3.wasm',
@@ -137,6 +138,17 @@ if (typeof window === 'undefined') {
 
     event.respondWith(
       (async () => {
+        if (url.pathname.endsWith('version.json')) {
+          try {
+            const networkResponse = await fetch(new Request(fetchRequest, { cache: 'no-store' }));
+            if (networkResponse.ok) {
+              return wrapResponse(networkResponse);
+            }
+          } catch {
+            /* fall through */
+          }
+        }
+
         const cache = await caches.open(CACHE_VERSION);
 
         try {
