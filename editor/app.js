@@ -45,15 +45,24 @@ import {
 
 import {
   REVIEW_MODES,
-  BUILTIN_TEMPLATES,
   parseLines,
   computeChangeSets,
+  isReasonableCorrection,
+  hasPendingReviewChanges,
   buildWritingContextBlock,
   loadAdvancedSettings,
   saveAdvancedSettings,
-  allTemplates,
   defaultAdvancedSettings,
 } from './advanced.js';
+
+import {
+  appendProcessingLog,
+  getProcessingLog,
+  clearProcessingLog,
+  formatLogForDisplay,
+  buildDebugReport,
+  openBugReportEmail,
+} from './processing-log.js';
 
 import { computeWritingScores } from './scores.js';
 
@@ -482,14 +491,16 @@ function renderReviewPanel() {
     .join('');
 
   correctedOutput.innerHTML = `
-    <div class="review-toolbar">
-      <span class="review-count">${pending.length} suggestion${pending.length === 1 ? '' : 's'}</span>
-      <div class="review-toolbar-actions">
-        <button type="button" class="btn btn-sm btn-primary" id="review-accept-all">Accept all</button>
-        <button type="button" class="btn btn-sm" id="review-reject-all">Reject all</button>
+    <div class="review-shell">
+      <div class="review-toolbar">
+        <span class="review-count">${pending.length} suggestion${pending.length === 1 ? '' : 's'}</span>
+        <div class="review-toolbar-actions">
+          <button type="button" class="btn btn-sm btn-primary" id="review-accept-all">Accept all</button>
+          <button type="button" class="btn btn-sm" id="review-reject-all">Reject all</button>
+        </div>
       </div>
-    </div>
-    <div class="review-list">${items}</div>`;
+      <div class="review-list">${items}</div>
+    </div>`;
 
   correctedOutput.querySelector('#review-accept-all')?.addEventListener('click', acceptAllChanges);
   correctedOutput.querySelector('#review-reject-all')?.addEventListener('click', rejectAllChanges);
@@ -536,9 +547,12 @@ function resolveChange(changeId, accept) {
   }
 
   scheduleAutosave();
-  scheduleDebouncedAI();
   renderReviewPanel();
   updateScores(syncEditorPlainText());
+
+  if (!hasPendingReviewChanges(pendingChanges)) {
+    scheduleDebouncedAI();
+  }
 }
 
 function acceptAllChanges() {
@@ -583,7 +597,17 @@ function updateNewUpdatePanel(text) {
   correctedText = text ?? '';
   if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
     const original = syncEditorPlainText();
-    pendingChanges = computeChangeSets(original, correctedText);
+    if (!isReasonableCorrection(original, correctedText)) {
+      appendProcessingLog('warn', 'AI output ignored — too different from your text');
+      if (hasPendingReviewChanges(pendingChanges)) {
+        refreshUpdatePanel();
+        return;
+      }
+      correctedText = '';
+      pendingChanges = [];
+    } else {
+      pendingChanges = computeChangeSets(original, correctedText);
+    }
   } else {
     pendingChanges = [];
   }
@@ -811,49 +835,59 @@ function hideOverlay(el) {
   el.setAttribute('hidden', '');
 }
 
-function renderAdvancedTemplateList() {
-  const list = document.getElementById('advanced-template-list');
-  if (!list) return;
+function renderProcessingLogPanel() {
+  const logEl = document.getElementById('adv-processing-log');
+  if (logEl) {
+    logEl.textContent = formatLogForDisplay();
+  }
+}
 
-  const templates = allTemplates(advancedSettings);
-  list.innerHTML = templates
-    .map((tpl) => {
-      const custom = !BUILTIN_TEMPLATES.some((b) => b.id === tpl.id);
-      return `
-        <div class="advanced-template-item" data-template-id="${escapeHtml(tpl.id)}">
-          <div>
-            <strong>${escapeHtml(tpl.name)}</strong>
-            ${custom ? '<span class="setup-badge">Custom</span>' : ''}
-          </div>
-          <div class="advanced-template-actions">
-            <button type="button" class="btn btn-sm btn-primary adv-use-template">Use</button>
-            ${custom ? '<button type="button" class="btn btn-sm adv-delete-template">Delete</button>' : ''}
-          </div>
-        </div>`;
-    })
-    .join('');
-
-  list.querySelectorAll('.adv-use-template').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.advanced-template-item')?.dataset.templateId;
-      const tpl = templates.find((t) => t.id === id);
-      if (!tpl) return;
-      pushUndoSnapshot();
-      setEditorPlainText(tpl.body);
-      scheduleDebouncedAI();
-      scheduleAutosave();
-      showToast(`Template inserted: ${tpl.name}`);
-      hideOverlay(advancedOverlay);
-    });
+async function refreshDebugReportPreview() {
+  const reportEl = document.getElementById('adv-debug-report');
+  if (!reportEl) return;
+  const report = await buildDebugReport({
+    appVersion,
+    reviewMode,
+    outputLanguage,
+    correctionMode: currentMode,
+    modelId: getActiveModelId() || getSelectedModelPref(),
   });
+  reportEl.value = JSON.stringify(report, null, 2);
+}
 
-  list.querySelectorAll('.adv-delete-template').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.advanced-template-item')?.dataset.templateId;
-      advancedSettings.customTemplates = advancedSettings.customTemplates.filter((t) => t.id !== id);
-      renderAdvancedTemplateList();
-    });
-  });
+async function copyDebugReport() {
+  const reportEl = document.getElementById('adv-debug-report');
+  if (!reportEl?.value) {
+    await refreshDebugReportPreview();
+  }
+  const text = document.getElementById('adv-debug-report')?.value || '';
+  if (!text) {
+    showToast('Could not build debug report');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Debug info copied');
+  } catch (err) {
+    console.error('[ERROR]', err);
+    showToast('Copy failed — select the text manually');
+  }
+}
+
+async function sendDebugReport() {
+  await refreshDebugReportPreview();
+  const text = document.getElementById('adv-debug-report')?.value || '';
+  if (!text) {
+    showToast('Could not build debug report');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.error('[ERROR]', err);
+  }
+  openBugReportEmail(text, appVersion);
+  showToast('Email opened — full debug info copied to clipboard');
 }
 
 function openAdvancedModal() {
@@ -872,8 +906,9 @@ function openAdvancedModal() {
     if (blocked) blocked.value = (advancedSettings.blockedPhrases || []).join('\n');
 
     syncReviewModeUI();
-    switchAdvancedTab('templates');
-    renderAdvancedTemplateList();
+    switchAdvancedTab('rules');
+    renderProcessingLogPanel();
+    void refreshDebugReportPreview();
     showOverlay(advancedOverlay);
   } catch (err) {
     console.error('[ADVANCED] Could not open settings', err);
@@ -922,7 +957,13 @@ function bindAdvancedModal() {
   });
 
   document.querySelectorAll('.advanced-tab').forEach((btn) => {
-    btn.addEventListener('click', () => switchAdvancedTab(btn.dataset.advTab));
+    btn.addEventListener('click', () => {
+      switchAdvancedTab(btn.dataset.advTab);
+      if (btn.dataset.advTab === 'debug') {
+        renderProcessingLogPanel();
+        void refreshDebugReportPreview();
+      }
+    });
   });
 
   document.getElementById('adv-review-incremental')?.addEventListener('click', () => {
@@ -932,25 +973,16 @@ function bindAdvancedModal() {
     setReviewMode(REVIEW_MODES.WHOLE);
   });
 
-  document.getElementById('adv-save-template')?.addEventListener('click', () => {
-    const name = document.getElementById('adv-new-template-name').value.trim();
-    const body = syncEditorPlainText().trim();
-    if (!name) {
-      showToast('Enter a template name');
-      return;
-    }
-    if (!body) {
-      showToast('Write something in the editor first');
-      return;
-    }
-    advancedSettings.customTemplates.push({
-      id: `custom_${Date.now()}`,
-      name,
-      body,
-    });
-    document.getElementById('adv-new-template-name').value = '';
-    renderAdvancedTemplateList();
-    showToast('Template saved — click Save to persist');
+  document.getElementById('adv-log-clear')?.addEventListener('click', () => {
+    clearProcessingLog();
+    renderProcessingLogPanel();
+    showToast('Processing log cleared');
+  });
+  document.getElementById('adv-copy-report')?.addEventListener('click', () => {
+    void copyDebugReport();
+  });
+  document.getElementById('adv-send-report')?.addEventListener('click', () => {
+    void sendDebugReport();
   });
 
   document.getElementById('whats-new-close')?.addEventListener('click', closeWhatsNew);
@@ -1025,10 +1057,12 @@ function setFixing(show, message) {
 function onCorrectionProgress({ phase, batch, total }) {
   if (total <= 1) {
     setFixing(true, phase === 'translating' ? 'Translating' : 'Fixing');
+    appendProcessingLog('info', phase === 'translating' ? 'Translating text' : 'Running correction');
     return;
   }
   const label = phase === 'translating' ? 'Translating' : 'Fixing';
   setFixing(true, `${label} (${batch}/${total})`);
+  appendProcessingLog('info', `${label} batch ${batch}/${total}`);
 }
 
 function syncModelForLanguage() {
@@ -1499,11 +1533,16 @@ async function runCorrectionOnly(text, requestId) {
     if (modeFixed !== null) {
       correctedText = modeFixed;
       updateNewUpdatePanel(correctedText);
+      appendProcessingLog('info', 'Correction complete', {
+        mode: currentMode,
+        chars: correctedText.length,
+      });
     }
 
     updateScores(text);
   } catch (err) {
     console.error('[ERROR]', err);
+    appendProcessingLog('error', 'Correction failed', err?.message || String(err));
     const msg = String(err?.message || err || '').toLowerCase();
     if (msg.includes('device was lost') || msg.includes('disposed') || msg.includes('modelnotloaded')) {
       showToast('GPU ran out of memory — switch to Qwen 0.5B in the header');
@@ -1535,6 +1574,10 @@ function scheduleDebouncedAI() {
   grammarIssues = filterIssues(analyzeGrammarIssuesLocal(text), text);
   updateScores(text);
   updateDocStats(text);
+
+  if (reviewMode === REVIEW_MODES.INCREMENTAL && hasPendingReviewChanges(pendingChanges)) {
+    return;
+  }
 
   if (text.length < MIN_TEXT_LENGTH) {
     bumpRequestGeneration();
@@ -2285,7 +2328,7 @@ function renderSetupStep() {
         <li><strong>Export</strong> — Download all drafts & settings as a backup file</li>
         <li><strong>Import</strong> — Restore from a backup (replaces local data)</li>
         <li><strong>Delete All</strong> — Erase everything on this device</li>
-        <li><strong>Advanced</strong> — Templates, custom rules, dictionary, and blocked phrases (gear icon in header)</li>
+        <li><strong>Advanced</strong> — Custom rules, dictionary, blocked phrases, and debug tools (gear icon in header)</li>
         <li><strong>Change model</strong> — Pick a local model in the header (cached after first load)</li>
       </ul>`;
   }
@@ -2742,6 +2785,7 @@ function bindEvents() {
 
 async function bootstrap() {
   const versionData = await checkAppVersion();
+  appendProcessingLog('info', 'EditorPilot started', { version: appVersion || versionData?.version || 'unknown' });
 
   bindEvents();
   bindAdvancedModal();

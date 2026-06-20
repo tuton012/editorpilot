@@ -309,24 +309,16 @@
   <div id="advanced-overlay" class="modal-overlay" hidden>
     <div class="modal modal-advanced" role="dialog" aria-modal="true" aria-labelledby="advanced-title">
       <h2 class="modal-title" id="advanced-title">Advanced settings</h2>
-      <p class="modal-message">Templates, writing rules, dictionary, and blocked phrases — stored on this device only.</p>
+      <p class="modal-message">Writing rules, dictionary, blocked phrases, and debug tools — stored on this device only.</p>
       <div class="advanced-tabs" role="tablist" aria-label="Advanced sections">
-        <button type="button" class="advanced-tab active" data-adv-tab="templates" role="tab" aria-selected="true">Templates</button>
-        <button type="button" class="advanced-tab" data-adv-tab="rules" role="tab">Custom rules</button>
+        <button type="button" class="advanced-tab active" data-adv-tab="rules" role="tab" aria-selected="true">Custom rules</button>
         <button type="button" class="advanced-tab" data-adv-tab="dictionary" role="tab">Dictionary</button>
         <button type="button" class="advanced-tab" data-adv-tab="blocked" role="tab">Blocked</button>
         <button type="button" class="advanced-tab" data-adv-tab="review" role="tab">Review mode</button>
+        <button type="button" class="advanced-tab" data-adv-tab="debug" role="tab">Debug</button>
       </div>
       <div class="advanced-body">
-        <div class="advanced-panel active" id="adv-panel-templates" role="tabpanel">
-          <p class="advanced-hint">Insert a starter template into the editor, or save your own.</p>
-          <div id="advanced-template-list" class="advanced-template-list"></div>
-          <div class="advanced-add-row">
-            <input type="text" id="adv-new-template-name" class="advanced-input" placeholder="Template name" maxlength="80">
-            <button type="button" class="btn btn-sm btn-primary" id="adv-save-template">Save current text as template</button>
-          </div>
-        </div>
-        <div class="advanced-panel" id="adv-panel-rules" role="tabpanel" hidden>
+        <div class="advanced-panel active" id="adv-panel-rules" role="tabpanel">
           <label for="adv-custom-rules" class="advanced-label">Custom writing rules (one per line)</label>
           <textarea id="adv-custom-rules" class="advanced-textarea" rows="6" placeholder="Always use Oxford comma&#10;Keep sentences under 25 words"></textarea>
         </div>
@@ -347,6 +339,22 @@
             <button type="button" class="setup-option" id="adv-review-whole" data-value="whole">
               <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>
             </button>
+          </div>
+        </div>
+        <div class="advanced-panel" id="adv-panel-debug" role="tabpanel" hidden>
+          <p class="advanced-hint">Processing activity and errors from this session.</p>
+          <div class="debug-log-toolbar">
+            <button type="button" class="btn btn-sm" id="adv-log-clear">Clear log</button>
+          </div>
+          <pre id="adv-processing-log" class="debug-log" aria-live="polite"></pre>
+          <div class="debug-report-section">
+            <p class="advanced-label">Bug report</p>
+            <p class="advanced-hint">Generate a debug snapshot and send it to the EditorPilot team.</p>
+            <div class="debug-report-actions">
+              <button type="button" class="btn btn-sm" id="adv-copy-report">Copy debug info</button>
+              <button type="button" class="btn btn-sm btn-primary" id="adv-send-report">Send report</button>
+            </div>
+            <textarea id="adv-debug-report" class="advanced-textarea debug-report" rows="8" readonly placeholder="Click Copy debug info or Send report to generate a snapshot."></textarea>
           </div>
         </div>
       </div>

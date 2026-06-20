@@ -1309,7 +1309,9 @@ html[data-theme="dark"] .app.focus-mode::after {
 .sidebar::-webkit-scrollbar,
 .rewrite-options::-webkit-scrollbar,
 .rewrite-option-body::-webkit-scrollbar,
-.setup-body::-webkit-scrollbar {
+.setup-body::-webkit-scrollbar,
+.review-list::-webkit-scrollbar,
+.debug-log::-webkit-scrollbar {
   width: 6px;
 }
 
@@ -1318,7 +1320,9 @@ html[data-theme="dark"] .app.focus-mode::after {
 .sidebar::-webkit-scrollbar-thumb,
 .rewrite-options::-webkit-scrollbar-thumb,
 .rewrite-option-body::-webkit-scrollbar-thumb,
-.setup-body::-webkit-scrollbar-thumb {
+.setup-body::-webkit-scrollbar-thumb,
+.review-list::-webkit-scrollbar-thumb,
+.debug-log::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
   border-radius: 3px;
 }
@@ -1768,7 +1772,9 @@ html[data-theme="dark"] .app.focus-mode::after {
 .sidebar::-webkit-scrollbar-thumb:hover,
 .rewrite-options::-webkit-scrollbar-thumb:hover,
 .rewrite-option-body::-webkit-scrollbar-thumb:hover,
-.setup-body::-webkit-scrollbar-thumb:hover {
+.setup-body::-webkit-scrollbar-thumb:hover,
+.review-list::-webkit-scrollbar-thumb:hover,
+.debug-log::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
 
@@ -1825,7 +1831,7 @@ html[data-theme="dark"] .app.focus-mode::after {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: 0;
+  padding-bottom: 24px;
 }
 
 .modal-advanced .modal-message {
@@ -1895,45 +1901,51 @@ html[data-theme="dark"] .app.focus-mode::after {
   resize: vertical;
 }
 
-.advanced-template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+.modal-advanced .modal-actions {
+  flex-shrink: 0;
+  padding-top: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-top: 1px solid var(--border-soft);
 }
 
-.advanced-template-item {
+.debug-log-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.debug-log {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0 0 16px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.advanced-template-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+.debug-report-section {
+  padding-top: 4px;
+  border-top: 1px solid var(--border-soft);
 }
 
-.advanced-add-row {
+.debug-report-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
+  margin-bottom: 8px;
 }
 
-.advanced-add-row .advanced-input {
-  flex: 1 1 160px;
-}
-
-.modal-advanced .modal-actions {
-  flex-shrink: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-soft);
+.debug-report {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 /* ---- Review mode panel ---- */
@@ -1960,10 +1972,22 @@ html[data-theme="dark"] .app.focus-mode::after {
   flex-wrap: wrap;
 }
 
+.review-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
 .review-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(380px, calc(100dvh - 380px));
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .review-item {

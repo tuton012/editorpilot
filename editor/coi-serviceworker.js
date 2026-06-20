@@ -1,7 +1,7 @@
 /*! EditorPilot service worker — COOP/COEP + offline PWA cache */
 let coepCredentialless = true;
 
-const CACHE_VERSION = 'editorpilot-pwa-v7';
+const CACHE_VERSION = 'editorpilot-pwa-v8';
 
 const PRECACHE_URLS = [
   './',
@@ -12,6 +12,7 @@ const PRECACHE_URLS = [
   './db.js',
   './db-worker.js',
   './advanced.js',
+  './processing-log.js',
   './scores.js',
   './logo.png',
   './manifest.webmanifest',

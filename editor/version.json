@@ -1,7 +1,8 @@
 {
-  "version": "1.4.1",
+  "version": "1.5.0",
   "whatsNew": [
-    "Advanced settings now uses a gear icon and opens reliably",
-    "Choose Review each change or Replace whole text on the welcome setup step"
+    "Review mode no longer spawns random suggestions after you accept a change",
+    "Suggestion list scrolls instead of stretching the panel",
+    "Templates removed — Advanced settings now includes Processing log and bug reporting"
   ]
 }
