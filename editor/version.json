@@ -1,8 +1,9 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "whatsNew": [
-    "Review mode no longer spawns random suggestions after you accept a change",
-    "Suggestion list scrolls instead of stretching the panel",
-    "Templates removed — Advanced settings now includes Processing log and bug reporting"
+    "Setup model download now shows percentage progress",
+    "Download confirmation appears above the setup wizard",
+    "Review each word mode — accept or reject individual words, commas, and periods",
+    "Advanced settings opens to Custom rules with improved button spacing"
   ]
 }

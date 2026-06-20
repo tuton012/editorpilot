@@ -1380,6 +1380,10 @@ html[data-theme="dark"] .app.focus-mode::after {
   z-index: 2500;
 }
 
+#modal-overlay {
+  z-index: 2700;
+}
+
 .modal {
   width: 100%;
   max-width: 440px;
@@ -1831,7 +1835,7 @@ html[data-theme="dark"] .app.focus-mode::after {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: 24px;
+  padding: 28px 28px 0;
 }
 
 .modal-advanced .modal-message {
@@ -1903,16 +1907,17 @@ html[data-theme="dark"] .app.focus-mode::after {
 
 .modal-advanced .modal-actions {
   flex-shrink: 0;
-  padding-top: 12px;
-  padding-bottom: 8px;
-  margin-bottom: 4px;
+  padding: 16px 0 28px;
+  margin-top: 12px;
+  gap: 12px;
   border-top: 1px solid var(--border-soft);
 }
 
 .debug-log-toolbar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .debug-log {
@@ -1938,8 +1943,8 @@ html[data-theme="dark"] .app.focus-mode::after {
 .debug-report-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .debug-report {

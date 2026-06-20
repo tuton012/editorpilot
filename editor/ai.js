@@ -116,19 +116,19 @@ function formatLoadingStatus(progress, statusText = '') {
     /cache|cached|from local|already downloaded/i.test(statusText) &&
     !/download|fetch|network/i.test(statusText);
 
-  if (fromCache) {
-    if (progress === undefined || progress === null || Number.isNaN(progress)) {
-      return 'Loading from cache…';
-    }
-    const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-    return `Loading from cache… ${pct}%`;
+  let pct = null;
+  if (progress !== undefined && progress !== null && !Number.isNaN(Number(progress))) {
+    pct = Math.min(100, Math.max(0, Math.round(Number(progress) * 100)));
+  } else {
+    const match = String(statusText || '').match(/(\d{1,3})\s*%/);
+    if (match) pct = Number(match[1]);
   }
 
-  if (progress === undefined || progress === null || Number.isNaN(progress)) {
-    return 'Loading…';
+  if (pct !== null) {
+    return fromCache ? `Loading from cache… ${pct}%` : `Downloading… ${pct}%`;
   }
-  const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-  return `Loading… ${pct}%`;
+
+  return fromCache ? 'Loading from cache… 0%' : 'Downloading… 0%';
 }
 
 export function getCatalogModel(modelId) {

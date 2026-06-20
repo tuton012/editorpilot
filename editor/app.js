@@ -493,7 +493,7 @@ function renderReviewPanel() {
   correctedOutput.innerHTML = `
     <div class="review-shell">
       <div class="review-toolbar">
-        <span class="review-count">${pending.length} suggestion${pending.length === 1 ? '' : 's'}</span>
+        <span class="review-count">${pending.length} change${pending.length === 1 ? '' : 's'}</span>
         <div class="review-toolbar-actions">
           <button type="button" class="btn btn-sm btn-primary" id="review-accept-all">Accept all</button>
           <button type="button" class="btn btn-sm" id="review-reject-all">Reject all</button>
@@ -514,19 +514,35 @@ function renderReviewPanel() {
 
 function applyChangeToEditor(change) {
   pushUndoSnapshot();
-  let text = syncEditorPlainText();
-  if (change.type === 'insert' || !change.original) {
-    text = text.trim() ? `${text.trim()}\n\n${change.suggested}` : change.suggested;
-  } else if (change.type === 'delete') {
-    const idx = text.indexOf(change.original);
-    if (idx < 0) return false;
-    text = (text.slice(0, idx) + text.slice(idx + change.original.length)).replace(/\n{3,}/g, '\n\n').trim();
-  } else {
-    const idx = text.indexOf(change.original);
-    if (idx < 0) return false;
-    text = text.slice(0, idx) + change.suggested + text.slice(idx + change.original.length);
+  const text = syncEditorPlainText();
+
+  if (change.startIndex !== undefined && change.endIndex !== undefined) {
+    const start = change.startIndex;
+    const end = change.endIndex;
+    if (change.type === 'insert') {
+      if (start < 0 || start > text.length) return false;
+      setEditorPlainText(text.slice(0, start) + change.suggested + text.slice(start));
+      return true;
+    }
+    if (start < 0 || end > text.length || start > end) return false;
+    const slice = text.slice(start, end);
+    if (change.original && slice !== change.original) return false;
+    setEditorPlainText(text.slice(0, start) + (change.suggested || '') + text.slice(end));
+    return true;
   }
-  setEditorPlainText(text);
+
+  if (change.type === 'insert' || !change.original) {
+    setEditorPlainText(text.trim() ? `${text}${change.suggested}` : change.suggested);
+    return true;
+  }
+
+  const idx = text.indexOf(change.original);
+  if (idx < 0) return false;
+  if (change.type === 'delete') {
+    setEditorPlainText(text.slice(0, idx) + text.slice(idx + change.original.length));
+  } else {
+    setEditorPlainText(text.slice(0, idx) + change.suggested + text.slice(idx + change.original.length));
+  }
   return true;
 }
 
@@ -541,6 +557,15 @@ function resolveChange(changeId, accept) {
     }
     change.status = 'accepted';
     showToast('Change accepted');
+
+    if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
+      const rejected = pendingChanges.filter((c) => c.status === 'rejected');
+      const fresh = computeChangeSets(syncEditorPlainText(), correctedText);
+      pendingChanges = [
+        ...rejected,
+        ...fresh.map((c) => ({ ...c, status: 'pending' })),
+      ];
+    }
   } else {
     change.status = 'rejected';
     showToast('Change rejected');
@@ -1830,12 +1855,21 @@ let lastModelSelectValue = 'auto';
 function formatLoadingLabel({ text, state, progress }) {
   if (state !== 'loading') return text;
   if (text?.startsWith('Checking')) return 'Checking…';
-  if (/%\s*$/.test(String(text || '').trim())) return text;
-  if (progress !== undefined && progress !== null) {
-    const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-    return `Loading… ${pct}%`;
+
+  let pct = null;
+  if (progress !== undefined && progress !== null && !Number.isNaN(Number(progress))) {
+    pct = Math.min(100, Math.max(0, Math.round(Number(progress) * 100)));
+  } else {
+    const match = String(text || '').match(/(\d{1,3})\s*%/);
+    if (match) pct = Number(match[1]);
   }
-  return text || 'Loading…';
+
+  if (pct !== null) {
+    const fromCache = /cache/i.test(String(text || ''));
+    return fromCache ? `Loading from cache… ${pct}%` : `Downloading… ${pct}%`;
+  }
+
+  return 'Downloading… 0%';
 }
 
 function cacheStatusLabel(cached) {
@@ -2096,7 +2130,7 @@ function renderSetupModelOptions() {
     <div class="setup-options">${cards}</div>
     <div id="setup-model-progress" class="setup-model-progress" hidden>
       <span class="panel-fixing-spinner" aria-hidden="true"></span>
-      <span id="setup-model-progress-text">Preparing model…</span>
+      <span id="setup-model-progress-text">Downloading… 0%</span>
     </div>`;
 
   setupBody.querySelectorAll('.setup-model-option').forEach((btn) => {
@@ -2129,12 +2163,17 @@ async function downloadSetupModel() {
   const progressEl = document.getElementById('setup-model-progress');
   const progressText = document.getElementById('setup-model-progress-text');
   progressEl?.removeAttribute('hidden');
+  if (progressText) {
+    progressText.textContent = 'Downloading… 0%';
+  }
 
   const statusHandler = (payload) => {
     if (progressText) {
       progressText.textContent = formatLoadingLabel(payload);
     }
   };
+
+  statusHandler({ text: 'Downloading…', state: 'loading', progress: 0 });
 
   setStatusCallback((payload) => {
     statusHandler(payload);
@@ -2189,7 +2228,7 @@ function renderSetupStep() {
       <p class="setup-field-label">How should AI updates appear?</p>
       <div class="setup-options">
         <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL ? 'selected' : ''}" id="setup-review-incremental" data-value="incremental">
-          <div><strong>Review each change</strong><span>Accept or reject suggestions one at a time</span></div>
+          <div><strong>Review each word</strong><span>Accept or reject word and punctuation changes one at a time</span></div>
         </button>
         <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.WHOLE ? 'selected' : ''}" id="setup-review-whole" data-value="whole">
           <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>

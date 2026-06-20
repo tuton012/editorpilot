@@ -62,8 +62,19 @@ export function buildWritingContextBlock(settings = defaultAdvancedSettings()) {
   return parts.length ? `\n\n${parts.join('\n')}` : '';
 }
 
-function tokenizeWords(text) {
-  return String(text || '').match(/\S+/g) || [];
+/** Words, punctuation, and whitespace as separate review tokens. */
+function tokenizeForReview(text) {
+  const tokens = [];
+  const re = /\w+|[^\w\s]|\s+/g;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    tokens.push({
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+  return tokens;
 }
 
 function lcsMatrix(a, b) {
@@ -82,24 +93,24 @@ function lcsMatrix(a, b) {
   return dp;
 }
 
-function wordDiffOps(original, corrected) {
-  const a = tokenizeWords(original);
-  const b = tokenizeWords(corrected);
+function diffTokens(origTokens, corrTokens) {
+  const a = origTokens.map((t) => t.text);
+  const b = corrTokens.map((t) => t.text);
   const dp = lcsMatrix(a, b);
   const ops = [];
-  let i = a.length;
-  let j = b.length;
+  let i = origTokens.length;
+  let j = corrTokens.length;
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      ops.unshift({ type: 'equal', word: a[i - 1] });
+      ops.unshift({ type: 'equal', oi: i - 1, cj: j - 1 });
       i--;
       j--;
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      ops.unshift({ type: 'insert', word: b[j - 1] });
+      ops.unshift({ type: 'insert', cj: j - 1 });
       j--;
     } else {
-      ops.unshift({ type: 'delete', word: a[i - 1] });
+      ops.unshift({ type: 'delete', oi: i - 1 });
       i--;
     }
   }
@@ -107,39 +118,86 @@ function wordDiffOps(original, corrected) {
   return ops;
 }
 
-function groupWordDiffOps(ops) {
-  const changes = [];
-  let chunk = null;
+function insertPosition(origTokens, corrTokens, ops, opIndex) {
+  let oi = 0;
+  let cj = 0;
 
-  const flush = () => {
-    if (!chunk) return;
-    const original = chunk.origWords.join(' ');
-    const suggested = chunk.suggWords.join(' ');
-    if (original || suggested) {
-      changes.push({
-        id: `chg_${changes.length}`,
-        original,
-        suggested,
-        status: 'pending',
-        type: !original ? 'insert' : !suggested ? 'delete' : 'replace',
-      });
-    }
-    chunk = null;
-  };
-
-  for (const op of ops) {
+  for (let k = 0; k < opIndex; k++) {
+    const op = ops[k];
     if (op.type === 'equal') {
-      flush();
-      continue;
+      oi = op.oi + 1;
+      cj = op.cj + 1;
+    } else if (op.type === 'delete') {
+      oi = op.oi + 1;
+    } else if (op.type === 'insert') {
+      cj = op.cj + 1;
     }
-    if (!chunk) {
-      chunk = { origWords: [], suggWords: [] };
-    }
-    if (op.type === 'delete') chunk.origWords.push(op.word);
-    if (op.type === 'insert') chunk.suggWords.push(op.word);
   }
 
-  flush();
+  if (oi > 0) {
+    return origTokens[oi - 1].end;
+  }
+  if (corrTokens.length && cj > 0) {
+    return corrTokens[cj - 1].start;
+  }
+  return 0;
+}
+
+/** One pending item per word or punctuation change. */
+function buildWordLevelChanges(original, corrected) {
+  const origTokens = tokenizeForReview(original);
+  const corrTokens = tokenizeForReview(corrected);
+  const ops = diffTokens(origTokens, corrTokens);
+  const changes = [];
+
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    if (op.type === 'equal') continue;
+
+    if (op.type === 'delete' && ops[i + 1]?.type === 'insert') {
+      const del = origTokens[op.oi];
+      const ins = corrTokens[ops[i + 1].cj];
+      changes.push({
+        id: `chg_${changes.length}`,
+        original: del.text,
+        suggested: ins.text,
+        startIndex: del.start,
+        endIndex: del.end,
+        status: 'pending',
+        type: 'replace',
+      });
+      i++;
+      continue;
+    }
+
+    if (op.type === 'delete') {
+      const del = origTokens[op.oi];
+      changes.push({
+        id: `chg_${changes.length}`,
+        original: del.text,
+        suggested: '',
+        startIndex: del.start,
+        endIndex: del.end,
+        status: 'pending',
+        type: 'delete',
+      });
+      continue;
+    }
+
+    if (op.type === 'insert') {
+      const ins = corrTokens[op.cj];
+      changes.push({
+        id: `chg_${changes.length}`,
+        original: '',
+        suggested: ins.text,
+        startIndex: insertPosition(origTokens, corrTokens, ops, i),
+        endIndex: insertPosition(origTokens, corrTokens, ops, i),
+        status: 'pending',
+        type: 'insert',
+      });
+    }
+  }
+
   return changes;
 }
 
@@ -153,16 +211,16 @@ export function isReasonableCorrection(original, corrected) {
   const lenRatio = c.length / Math.max(o.length, 1);
   if (lenRatio > 1.75 || lenRatio < 0.35) return false;
 
-  const origWords = tokenizeWords(o.toLowerCase());
-  const corrWords = tokenizeWords(c.toLowerCase());
-  if (!corrWords.length) return false;
+  const origTokens = tokenizeForReview(o).map((t) => t.text.toLowerCase());
+  const corrTokens = tokenizeForReview(c).map((t) => t.text.toLowerCase());
+  if (!corrTokens.length) return false;
 
-  const origSet = new Set(origWords);
-  const overlap = corrWords.filter((w) => origSet.has(w)).length / corrWords.length;
+  const origSet = new Set(origTokens);
+  const overlap = corrTokens.filter((w) => origSet.has(w)).length / corrTokens.length;
   return overlap >= 0.45;
 }
 
-/** Word-level change sets for accept/reject review mode. */
+/** Word and punctuation change sets for accept/reject review mode. */
 export function computeChangeSets(original, corrected) {
   if (!corrected?.trim()) return [];
   if (!original?.trim()) {
@@ -171,6 +229,8 @@ export function computeChangeSets(original, corrected) {
         id: 'chg_0',
         original: '',
         suggested: corrected.trim(),
+        startIndex: 0,
+        endIndex: 0,
         status: 'pending',
         type: 'insert',
       },
@@ -179,12 +239,14 @@ export function computeChangeSets(original, corrected) {
   if (original.trim() === corrected.trim()) return [];
   if (!isReasonableCorrection(original, corrected)) return [];
 
-  const changes = groupWordDiffOps(wordDiffOps(original, corrected));
+  const changes = buildWordLevelChanges(original, corrected);
   if (!changes.length && original.trim() !== corrected.trim()) {
     changes.push({
       id: 'chg_full',
       original: original.trim(),
       suggested: corrected.trim(),
+      startIndex: 0,
+      endIndex: original.length,
       status: 'pending',
       type: 'replace',
     });
