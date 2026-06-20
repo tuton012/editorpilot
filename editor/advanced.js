@@ -201,6 +201,41 @@ function buildWordLevelChanges(original, corrected) {
   return changes;
 }
 
+/** Drop AI-appended content beyond the original text span. */
+export function clipCorrectionTarget(original, corrected) {
+  const o = String(original || '');
+  const c = String(corrected || '');
+  if (!o || !c) return c;
+  if (c.length <= o.length + Math.max(12, Math.round(o.length * 0.08))) return c;
+
+  const oTrim = o.trimEnd();
+  return c.slice(0, oTrim.length);
+}
+
+function filterReviewChanges(changes, original) {
+  const maxIndex = String(original || '').length;
+  return changes.filter((change) => {
+    if (change.startIndex >= maxIndex) return false;
+    if (change.endIndex > maxIndex) return false;
+    return true;
+  });
+}
+
+export function shiftPendingChanges(changes, editEnd, delta) {
+  if (!delta) return changes;
+  return changes.map((change) => {
+    if (change.status !== 'pending') return change;
+    if (change.startIndex >= editEnd) {
+      return {
+        ...change,
+        startIndex: change.startIndex + delta,
+        endIndex: change.endIndex + delta,
+      };
+    }
+    return change;
+  });
+}
+
 /** Reject AI output that rewrites the text instead of correcting it. */
 export function isReasonableCorrection(original, corrected) {
   const o = String(original || '').trim();
@@ -208,11 +243,12 @@ export function isReasonableCorrection(original, corrected) {
   if (!c) return false;
   if (o === c) return true;
 
-  const lenRatio = c.length / Math.max(o.length, 1);
-  if (lenRatio > 1.75 || lenRatio < 0.35) return false;
+  const clipped = clipCorrectionTarget(o, c);
+  const lenRatio = clipped.length / Math.max(o.length, 1);
+  if (lenRatio > 1.25 || lenRatio < 0.35) return false;
 
   const origTokens = tokenizeForReview(o).map((t) => t.text.toLowerCase());
-  const corrTokens = tokenizeForReview(c).map((t) => t.text.toLowerCase());
+  const corrTokens = tokenizeForReview(clipped).map((t) => t.text.toLowerCase());
   if (!corrTokens.length) return false;
 
   const origSet = new Set(origTokens);
@@ -239,19 +275,8 @@ export function computeChangeSets(original, corrected) {
   if (original.trim() === corrected.trim()) return [];
   if (!isReasonableCorrection(original, corrected)) return [];
 
-  const changes = buildWordLevelChanges(original, corrected);
-  if (!changes.length && original.trim() !== corrected.trim()) {
-    changes.push({
-      id: 'chg_full',
-      original: original.trim(),
-      suggested: corrected.trim(),
-      startIndex: 0,
-      endIndex: original.length,
-      status: 'pending',
-      type: 'replace',
-    });
-  }
-
+  const target = clipCorrectionTarget(original, corrected);
+  const changes = filterReviewChanges(buildWordLevelChanges(original, target), original);
   return changes;
 }
 

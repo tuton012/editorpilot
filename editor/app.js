@@ -49,6 +49,8 @@ import {
   computeChangeSets,
   isReasonableCorrection,
   hasPendingReviewChanges,
+  clipCorrectionTarget,
+  shiftPendingChanges,
   buildWritingContextBlock,
   loadAdvancedSettings,
   saveAdvancedSettings,
@@ -512,8 +514,8 @@ function renderReviewPanel() {
   });
 }
 
-function applyChangeToEditor(change) {
-  pushUndoSnapshot();
+function applyChangeToEditor(change, { skipUndo = false } = {}) {
+  if (!skipUndo) pushUndoSnapshot();
   const text = syncEditorPlainText();
 
   if (change.startIndex !== undefined && change.endIndex !== undefined) {
@@ -532,8 +534,11 @@ function applyChangeToEditor(change) {
   }
 
   if (change.type === 'insert' || !change.original) {
-    setEditorPlainText(text.trim() ? `${text}${change.suggested}` : change.suggested);
-    return true;
+    if (change.startIndex !== undefined && change.startIndex <= text.length) {
+      setEditorPlainText(text.slice(0, change.startIndex) + change.suggested + text.slice(change.startIndex));
+      return true;
+    }
+    return false;
   }
 
   const idx = text.indexOf(change.original);
@@ -551,54 +556,62 @@ function resolveChange(changeId, accept) {
   if (!change || change.status !== 'pending') return;
 
   if (accept) {
+    const editEnd = change.endIndex ?? change.startIndex ?? 0;
+    const before = syncEditorPlainText();
+
     if (!applyChangeToEditor(change)) {
       showToast('Could not apply — text changed');
       return;
     }
-    change.status = 'accepted';
-    showToast('Change accepted');
 
-    if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
-      const rejected = pendingChanges.filter((c) => c.status === 'rejected');
-      const fresh = computeChangeSets(syncEditorPlainText(), correctedText);
-      pendingChanges = [
-        ...rejected,
-        ...fresh.map((c) => ({ ...c, status: 'pending' })),
-      ];
-    }
+    const after = syncEditorPlainText();
+    const delta = after.length - before.length;
+
+    pendingChanges = shiftPendingChanges(
+      pendingChanges.filter((c) => c.id !== changeId),
+      editEnd,
+      delta
+    );
+
+    showToast('Change accepted');
   } else {
-    change.status = 'rejected';
+    pendingChanges = pendingChanges.filter((c) => c.id !== changeId);
     showToast('Change rejected');
   }
 
   scheduleAutosave();
   renderReviewPanel();
   updateScores(syncEditorPlainText());
-
-  if (!hasPendingReviewChanges(pendingChanges)) {
-    scheduleDebouncedAI();
-  }
 }
 
 function acceptAllChanges() {
-  if (correctedText) {
-    pushUndoSnapshot();
-    setEditorPlainText(correctedText);
-    pendingChanges.forEach((c) => {
-      c.status = 'accepted';
-    });
-    showToast('All changes applied');
-    scheduleAutosave();
-    scheduleDebouncedAI();
+  const pending = pendingChanges
+    .filter((c) => c.status === 'pending')
+    .sort((a, b) => b.startIndex - a.startIndex);
+
+  if (!pending.length) {
     renderReviewPanel();
-    updateScores(syncEditorPlainText());
+    return;
   }
+
+  pushUndoSnapshot();
+  for (const change of pending) {
+    if (!applyChangeToEditor(change, { skipUndo: true })) {
+      showToast('Could not apply all changes');
+      break;
+    }
+  }
+
+  pendingChanges = [];
+  correctedText = syncEditorPlainText();
+  showToast('All changes applied');
+  scheduleAutosave();
+  renderReviewPanel();
+  updateScores(syncEditorPlainText());
 }
 
 function rejectAllChanges() {
-  pendingChanges.forEach((c) => {
-    c.status = 'rejected';
-  });
+  pendingChanges = [];
   showToast('All suggestions dismissed');
   renderReviewPanel();
 }
@@ -619,19 +632,23 @@ function syncReviewModeUI(mode = reviewMode) {
 }
 
 function updateNewUpdatePanel(text) {
+  if (reviewMode === REVIEW_MODES.INCREMENTAL && hasPendingReviewChanges(pendingChanges)) {
+    refreshUpdatePanel();
+    return;
+  }
+
   correctedText = text ?? '';
   if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
     const original = syncEditorPlainText();
-    if (!isReasonableCorrection(original, correctedText)) {
+    const target = clipCorrectionTarget(original, correctedText);
+
+    if (!isReasonableCorrection(original, target)) {
       appendProcessingLog('warn', 'AI output ignored — too different from your text');
-      if (hasPendingReviewChanges(pendingChanges)) {
-        refreshUpdatePanel();
-        return;
-      }
       correctedText = '';
       pendingChanges = [];
     } else {
-      pendingChanges = computeChangeSets(original, correctedText);
+      correctedText = target;
+      pendingChanges = computeChangeSets(original, target);
     }
   } else {
     pendingChanges = [];

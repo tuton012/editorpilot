@@ -1,9 +1,8 @@
 {
-  "version": "1.5.1",
+  "version": "1.5.2",
   "whatsNew": [
-    "Setup model download now shows percentage progress",
-    "Download confirmation appears above the setup wizard",
-    "Review each word mode — accept or reject individual words, commas, and periods",
-    "Advanced settings opens to Custom rules with improved button spacing"
+    "Review each word no longer re-suggests the same word after you accept",
+    "AI text appended at the bottom is no longer offered as suggestions",
+    "Review queue stays stable until you finish or dismiss all changes"
   ]
 }

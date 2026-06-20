@@ -1,7 +1,7 @@
 /*! EditorPilot service worker — COOP/COEP + offline PWA cache */
 let coepCredentialless = true;
 
-const CACHE_VERSION = 'editorpilot-pwa-v9';
+const CACHE_VERSION = 'editorpilot-pwa-v10';
 
 const PRECACHE_URLS = [
   './',
