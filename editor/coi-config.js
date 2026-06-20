@@ -1,0 +1,1 @@
+window.coi = { coepCredentialless: () => true };

@@ -1,0 +1,7 @@
+Contact: https://editorpilot.com
+Preferred-Languages: en
+Canonical: https://editorpilot.com/.well-known/security.txt
+Policy: https://editorpilot.com/editor/
+
+# EditorPilot is a static client-side app. Report issues with our site,
+# service worker, or headers. User draft content stays on-device only.

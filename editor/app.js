@@ -1127,7 +1127,7 @@ async function importWorkspace(file) {
     const text = await file.text();
     const data = JSON.parse(text);
 
-    if (!data.app || data.app === APP_NAME || data.app === 'CalmWorkspace') {
+    if (data.app && data.app !== APP_NAME && data.app !== 'CalmWorkspace') {
       const ok = await showConfirmModal({
         title: 'Unknown backup file?',
         message: 'This file may not be an EditorPilot backup. Import anyway?',

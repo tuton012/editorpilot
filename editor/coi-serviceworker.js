@@ -14,6 +14,7 @@ const PRECACHE_URLS = [
   './scores.js',
   './logo.png',
   './manifest.webmanifest',
+  './coi-config.js',
   './vendor/sqlite-wasm/index.mjs',
   './vendor/sqlite-wasm/sqlite3.wasm',
   './vendor/sqlite-wasm/sqlite3-opfs-async-proxy.js',
