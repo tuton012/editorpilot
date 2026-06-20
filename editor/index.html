@@ -74,6 +74,12 @@
           </select>
         </div>
         <div class="header-actions">
+          <button type="button" class="btn btn-ghost btn-icon" id="btn-advanced" title="Advanced settings" aria-label="Advanced settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.41 1.41M18.36 18.36l1.41 1.41M1 12h2M21 12h2M4.22 19.78l1.41-1.41M18.36 5.64l1.41-1.41"/>
+            </svg>
+          </button>
           <button type="button" class="btn btn-ghost" id="btn-install" hidden>Install</button>
           <button type="button" class="btn btn-ghost" id="btn-export">Export</button>
           <button type="button" class="btn btn-ghost" id="btn-import">Import</button>
@@ -288,7 +294,7 @@
 
   <div id="setup-overlay" class="modal-overlay setup-overlay" hidden>
     <div class="modal modal-setup" role="dialog" aria-modal="true" aria-labelledby="setup-title">
-      <div class="setup-progress" id="setup-progress">Step 1 of 6</div>
+      <div class="setup-progress" id="setup-progress">Step 1 of 7</div>
       <h2 class="modal-title" id="setup-title">Welcome to EditorPilot</h2>
       <p class="modal-message" id="setup-message">EditorPilot is an AI writing assistant that lives entirely in your browser. No data leaves your device. No accounts. No tracking. Just better writing.</p>
       <div class="setup-body" id="setup-body"></div>
@@ -296,6 +302,68 @@
         <button type="button" class="btn" id="setup-close">Close</button>
         <button type="button" class="btn" id="setup-back" hidden>Back</button>
         <button type="button" class="btn btn-primary" id="setup-next">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="advanced-overlay" class="modal-overlay" hidden>
+    <div class="modal modal-advanced" role="dialog" aria-modal="true" aria-labelledby="advanced-title">
+      <h2 class="modal-title" id="advanced-title">Advanced settings</h2>
+      <p class="modal-message">Templates, writing rules, dictionary, and blocked phrases — stored on this device only.</p>
+      <div class="advanced-tabs" role="tablist" aria-label="Advanced sections">
+        <button type="button" class="advanced-tab active" data-adv-tab="templates" role="tab" aria-selected="true">Templates</button>
+        <button type="button" class="advanced-tab" data-adv-tab="rules" role="tab">Custom rules</button>
+        <button type="button" class="advanced-tab" data-adv-tab="dictionary" role="tab">Dictionary</button>
+        <button type="button" class="advanced-tab" data-adv-tab="blocked" role="tab">Blocked</button>
+        <button type="button" class="advanced-tab" data-adv-tab="review" role="tab">Review mode</button>
+      </div>
+      <div class="advanced-body">
+        <div class="advanced-panel active" id="adv-panel-templates" role="tabpanel">
+          <p class="advanced-hint">Insert a starter template into the editor, or save your own.</p>
+          <div id="advanced-template-list" class="advanced-template-list"></div>
+          <div class="advanced-add-row">
+            <input type="text" id="adv-new-template-name" class="advanced-input" placeholder="Template name" maxlength="80">
+            <button type="button" class="btn btn-sm btn-primary" id="adv-save-template">Save current text as template</button>
+          </div>
+        </div>
+        <div class="advanced-panel" id="adv-panel-rules" role="tabpanel" hidden>
+          <label for="adv-custom-rules" class="advanced-label">Custom writing rules (one per line)</label>
+          <textarea id="adv-custom-rules" class="advanced-textarea" rows="6" placeholder="Always use Oxford comma&#10;Keep sentences under 25 words"></textarea>
+        </div>
+        <div class="advanced-panel" id="adv-panel-dictionary" role="tabpanel" hidden>
+          <label for="adv-dictionary" class="advanced-label">Personal dictionary — never auto-correct these (one per line)</label>
+          <textarea id="adv-dictionary" class="advanced-textarea" rows="6" placeholder="EditorPilot&#10;WebGPU&#10;Your company name"></textarea>
+        </div>
+        <div class="advanced-panel" id="adv-panel-blocked" role="tabpanel" hidden>
+          <label for="adv-blocked" class="advanced-label">Blocked phrases — AI will not use these (one per line)</label>
+          <textarea id="adv-blocked" class="advanced-textarea" rows="6" placeholder="leverage&#10;synergy&#10;utilize"></textarea>
+        </div>
+        <div class="advanced-panel" id="adv-panel-review" role="tabpanel" hidden>
+          <p class="advanced-hint">Choose how AI suggestions appear in the Updated Version panel.</p>
+          <div class="setup-options">
+            <button type="button" class="setup-option" id="adv-review-incremental" data-value="incremental">
+              <div><strong>Review each change</strong><span>Accept or reject suggestions one at a time</span></div>
+            </button>
+            <button type="button" class="setup-option" id="adv-review-whole" data-value="whole">
+              <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="advanced-close">Close</button>
+        <button type="button" class="btn btn-primary" id="advanced-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="whats-new-overlay" class="modal-overlay" hidden>
+    <div class="modal modal-whats-new" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+      <h2 class="modal-title" id="whats-new-title">What’s new</h2>
+      <p class="modal-message" id="whats-new-version"></p>
+      <ul id="whats-new-list" class="whats-new-list"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="whats-new-close">Got it</button>
       </div>
     </div>
   </div>

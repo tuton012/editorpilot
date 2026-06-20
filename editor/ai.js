@@ -577,6 +577,12 @@ export function isAIReady() {
   return isReady && !!engine;
 }
 
+let activeWritingContext = '';
+
+export function setWritingContext(contextBlock = '') {
+  activeWritingContext = contextBlock || '';
+}
+
 export function getCorrectionPrompt(mode, text) {
   return getCorrectionMessages(mode, text).user;
 }
@@ -614,7 +620,7 @@ export function getCorrectionMessages(mode, text) {
     system:
       'You are a writing editor. Output ONLY the edited text the user should use. ' +
       'Never repeat the task, instructions, labels, or explanations. No markdown fences.',
-    user: `${task}\n\nText to edit:\n${text}`,
+    user: `${task}${activeWritingContext}\n\nText to edit:\n${text}`,
   };
 }
 

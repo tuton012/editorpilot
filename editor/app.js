@@ -15,6 +15,7 @@ import {
   getSelectedModelPref,
   setSelectedModelPref,
   setModelChangeCallback,
+  setWritingContext,
   getActiveModelId,
   resolveModelId,
   getModelLabel,
@@ -41,6 +42,18 @@ import {
   OUTPUT_LANGUAGES,
   SMALL_MODEL_LANGUAGES,
 } from './ai.js';
+
+import {
+  REVIEW_MODES,
+  BUILTIN_TEMPLATES,
+  parseLines,
+  computeChangeSets,
+  buildWritingContextBlock,
+  loadAdvancedSettings,
+  saveAdvancedSettings,
+  allTemplates,
+  defaultAdvancedSettings,
+} from './advanced.js';
 
 import { computeWritingScores } from './scores.js';
 
@@ -71,6 +84,7 @@ const HIGHLIGHT_DEBOUNCE_MS = 2500;
 const AUTOSAVE_MS = 2000;
 const MAX_UNDO = 40;
 const VERSION_STORAGE_KEY = 'editorpilot_app_version';
+const WHATS_NEW_SEEN_KEY = 'editorpilot_whats_new_seen';
 const CORRECTION_BATCH_HINT = 3500;
 
 const LEGAL_CONTENT = {
@@ -194,6 +208,9 @@ const legalClose = document.getElementById('legal-close');
 const donationModal = document.getElementById('donation-modal');
 const btnDonate = document.getElementById('btn-donate');
 const closeDonationModal = document.getElementById('close-donation-modal');
+const advancedOverlay = document.getElementById('advanced-overlay');
+const whatsNewOverlay = document.getElementById('whats-new-overlay');
+const btnAdvanced = document.getElementById('btn-advanced');
 
 let undoInputTimer = null;
 
@@ -202,6 +219,10 @@ let undoInputTimer = null;
 let currentMode = 'grammar';
 let currentDocId = null;
 let correctedText = '';
+let reviewMode = REVIEW_MODES.WHOLE;
+let pendingChanges = [];
+let advancedSettings = defaultAdvancedSettings();
+let appVersion = '';
 let grammarIssues = [];
 let ignoredPatterns = new Set();
 let activeIssueId = null;
@@ -378,6 +399,10 @@ function setCompareMode(on) {
 }
 
 function toggleCompareMode() {
+  if (reviewMode === REVIEW_MODES.INCREMENTAL) {
+    showToast('Compare is available in Replace whole text mode');
+    return;
+  }
   if (!correctedText) {
     showToast('No update to compare yet');
     return;
@@ -386,6 +411,11 @@ function toggleCompareMode() {
 }
 
 function refreshUpdatePanel() {
+  if (reviewMode === REVIEW_MODES.INCREMENTAL) {
+    renderReviewPanel();
+    return;
+  }
+
   if (!correctedText) {
     correctedOutput.textContent = 'Updated preview will display here once you start writing.';
     correctedOutput.classList.add('empty');
@@ -400,6 +430,164 @@ function refreshUpdatePanel() {
   } else {
     correctedOutput.textContent = correctedText;
   }
+}
+
+function syncWritingContextToAI() {
+  setWritingContext(buildWritingContextBlock(advancedSettings));
+}
+
+function renderReviewPanel() {
+  const pending = pendingChanges.filter((c) => c.status === 'pending');
+
+  if (!pending.length && !correctedText) {
+    correctedOutput.textContent = 'Updated preview will display here once you start writing.';
+    correctedOutput.classList.add('empty');
+    return;
+  }
+
+  correctedOutput.classList.remove('empty');
+
+  if (!pending.length) {
+    correctedOutput.innerHTML = `<p class="review-done">All suggestions reviewed.</p>`;
+    return;
+  }
+
+  const items = pending
+    .map(
+      (change) => `
+      <div class="review-item" data-change-id="${escapeHtml(change.id)}">
+        <div class="review-item-text">
+          ${
+            change.original
+              ? `<span class="review-original">${escapeHtml(change.original)}</span>`
+              : ''
+          }
+          ${
+            change.original && change.suggested
+              ? '<span class="review-arrow" aria-hidden="true">→</span>'
+              : ''
+          }
+          ${
+            change.suggested
+              ? `<span class="review-suggested">${escapeHtml(change.suggested)}</span>`
+              : '<span class="review-suggested review-muted">(remove)</span>'
+          }
+        </div>
+        <div class="review-item-actions">
+          <button type="button" class="btn btn-sm btn-primary review-accept">Accept</button>
+          <button type="button" class="btn btn-sm review-reject">Reject</button>
+        </div>
+      </div>`
+    )
+    .join('');
+
+  correctedOutput.innerHTML = `
+    <div class="review-toolbar">
+      <span class="review-count">${pending.length} suggestion${pending.length === 1 ? '' : 's'}</span>
+      <div class="review-toolbar-actions">
+        <button type="button" class="btn btn-sm btn-primary" id="review-accept-all">Accept all</button>
+        <button type="button" class="btn btn-sm" id="review-reject-all">Reject all</button>
+      </div>
+    </div>
+    <div class="review-list">${items}</div>`;
+
+  correctedOutput.querySelector('#review-accept-all')?.addEventListener('click', acceptAllChanges);
+  correctedOutput.querySelector('#review-reject-all')?.addEventListener('click', rejectAllChanges);
+
+  correctedOutput.querySelectorAll('.review-item').forEach((row) => {
+    const id = row.dataset.changeId;
+    row.querySelector('.review-accept')?.addEventListener('click', () => resolveChange(id, true));
+    row.querySelector('.review-reject')?.addEventListener('click', () => resolveChange(id, false));
+  });
+}
+
+function applyChangeToEditor(change) {
+  pushUndoSnapshot();
+  let text = syncEditorPlainText();
+  if (change.type === 'insert' || !change.original) {
+    text = text.trim() ? `${text.trim()}\n\n${change.suggested}` : change.suggested;
+  } else if (change.type === 'delete') {
+    const idx = text.indexOf(change.original);
+    if (idx < 0) return false;
+    text = (text.slice(0, idx) + text.slice(idx + change.original.length)).replace(/\n{3,}/g, '\n\n').trim();
+  } else {
+    const idx = text.indexOf(change.original);
+    if (idx < 0) return false;
+    text = text.slice(0, idx) + change.suggested + text.slice(idx + change.original.length);
+  }
+  setEditorPlainText(text);
+  return true;
+}
+
+function resolveChange(changeId, accept) {
+  const change = pendingChanges.find((c) => c.id === changeId);
+  if (!change || change.status !== 'pending') return;
+
+  if (accept) {
+    if (!applyChangeToEditor(change)) {
+      showToast('Could not apply — text changed');
+      return;
+    }
+    change.status = 'accepted';
+    showToast('Change accepted');
+  } else {
+    change.status = 'rejected';
+    showToast('Change rejected');
+  }
+
+  scheduleAutosave();
+  scheduleDebouncedAI();
+  renderReviewPanel();
+  updateScores(syncEditorPlainText());
+}
+
+function acceptAllChanges() {
+  if (correctedText) {
+    pushUndoSnapshot();
+    setEditorPlainText(correctedText);
+    pendingChanges.forEach((c) => {
+      c.status = 'accepted';
+    });
+    showToast('All changes applied');
+    scheduleAutosave();
+    scheduleDebouncedAI();
+    renderReviewPanel();
+    updateScores(syncEditorPlainText());
+  }
+}
+
+function rejectAllChanges() {
+  pendingChanges.forEach((c) => {
+    c.status = 'rejected';
+  });
+  showToast('All suggestions dismissed');
+  renderReviewPanel();
+}
+
+function setReviewMode(mode) {
+  reviewMode = mode === REVIEW_MODES.INCREMENTAL ? REVIEW_MODES.INCREMENTAL : REVIEW_MODES.WHOLE;
+  setPreference('review_mode', reviewMode).catch((err) => console.error('[ERROR]', err));
+  syncReviewModeUI();
+  refreshUpdatePanel();
+}
+
+function syncReviewModeUI() {
+  const incremental = reviewMode === REVIEW_MODES.INCREMENTAL;
+  document.getElementById('adv-review-incremental')?.classList.toggle('selected', incremental);
+  document.getElementById('adv-review-whole')?.classList.toggle('selected', !incremental);
+  document.getElementById('setup-review-incremental')?.classList.toggle('selected', incremental);
+  document.getElementById('setup-review-whole')?.classList.toggle('selected', !incremental);
+}
+
+function updateNewUpdatePanel(text) {
+  correctedText = text ?? '';
+  if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
+    const original = syncEditorPlainText();
+    pendingChanges = computeChangeSets(original, correctedText);
+  } else {
+    pendingChanges = [];
+  }
+  refreshUpdatePanel();
 }
 
 function isModKey(e) {
@@ -567,6 +755,7 @@ async function checkAppVersion() {
     const version = data?.version;
     if (!version) return null;
 
+    appVersion = version;
     updateFooterVersion(version);
 
     const stored = localStorage.getItem(VERSION_STORAGE_KEY);
@@ -578,11 +767,158 @@ async function checkAppVersion() {
     }
 
     localStorage.setItem(VERSION_STORAGE_KEY, version);
-    return version;
+    return data;
   } catch (err) {
     console.warn('[VERSION] Could not check version.json', err);
     return null;
   }
+}
+
+async function showWhatsNewIfNeeded(versionData) {
+  if (!versionData?.version) return;
+  const seen = localStorage.getItem(WHATS_NEW_SEEN_KEY);
+  if (seen && compareVersions(seen, versionData.version) >= 0) return;
+
+  const items = versionData.whatsNew;
+  if (!Array.isArray(items) || !items.length) {
+    localStorage.setItem(WHATS_NEW_SEEN_KEY, versionData.version);
+    return;
+  }
+
+  document.getElementById('whats-new-version').textContent = `EditorPilot ${versionData.version}`;
+  document.getElementById('whats-new-list').innerHTML = items
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join('');
+  whatsNewOverlay.hidden = false;
+}
+
+function closeWhatsNew() {
+  whatsNewOverlay.hidden = true;
+  if (appVersion) {
+    localStorage.setItem(WHATS_NEW_SEEN_KEY, appVersion);
+  }
+}
+
+function renderAdvancedTemplateList() {
+  const list = document.getElementById('advanced-template-list');
+  if (!list) return;
+
+  const templates = allTemplates(advancedSettings);
+  list.innerHTML = templates
+    .map((tpl) => {
+      const custom = !BUILTIN_TEMPLATES.some((b) => b.id === tpl.id);
+      return `
+        <div class="advanced-template-item" data-template-id="${escapeHtml(tpl.id)}">
+          <div>
+            <strong>${escapeHtml(tpl.name)}</strong>
+            ${custom ? '<span class="setup-badge">Custom</span>' : ''}
+          </div>
+          <div class="advanced-template-actions">
+            <button type="button" class="btn btn-sm btn-primary adv-use-template">Use</button>
+            ${custom ? '<button type="button" class="btn btn-sm adv-delete-template">Delete</button>' : ''}
+          </div>
+        </div>`;
+    })
+    .join('');
+
+  list.querySelectorAll('.adv-use-template').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('.advanced-template-item')?.dataset.templateId;
+      const tpl = templates.find((t) => t.id === id);
+      if (!tpl) return;
+      pushUndoSnapshot();
+      setEditorPlainText(tpl.body);
+      scheduleDebouncedAI();
+      scheduleAutosave();
+      showToast(`Template inserted: ${tpl.name}`);
+      advancedOverlay.hidden = true;
+    });
+  });
+
+  list.querySelectorAll('.adv-delete-template').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('.advanced-template-item')?.dataset.templateId;
+      advancedSettings.customTemplates = advancedSettings.customTemplates.filter((t) => t.id !== id);
+      renderAdvancedTemplateList();
+    });
+  });
+}
+
+function openAdvancedModal() {
+  document.getElementById('adv-custom-rules').value = advancedSettings.customRules.join('\n');
+  document.getElementById('adv-dictionary').value = advancedSettings.personalDictionary.join('\n');
+  document.getElementById('adv-blocked').value = advancedSettings.blockedPhrases.join('\n');
+  syncReviewModeUI();
+  renderAdvancedTemplateList();
+  advancedOverlay.hidden = false;
+}
+
+async function saveAdvancedModal() {
+  advancedSettings.customRules = parseLines(document.getElementById('adv-custom-rules').value);
+  advancedSettings.personalDictionary = parseLines(document.getElementById('adv-dictionary').value);
+  advancedSettings.blockedPhrases = parseLines(document.getElementById('adv-blocked').value);
+  await saveAdvancedSettings(setPreference, advancedSettings);
+  syncWritingContextToAI();
+  advancedOverlay.hidden = true;
+  showToast('Advanced settings saved');
+  scheduleDebouncedAI();
+}
+
+function switchAdvancedTab(tabId) {
+  document.querySelectorAll('.advanced-tab').forEach((btn) => {
+    const active = btn.dataset.advTab === tabId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.advanced-panel').forEach((panel) => {
+    const show = panel.id === `adv-panel-${tabId}`;
+    panel.hidden = !show;
+    panel.classList.toggle('active', show);
+  });
+}
+
+function bindAdvancedModal() {
+  btnAdvanced?.addEventListener('click', openAdvancedModal);
+  document.getElementById('advanced-close')?.addEventListener('click', () => {
+    advancedOverlay.hidden = true;
+  });
+  document.getElementById('advanced-save')?.addEventListener('click', () => {
+    void saveAdvancedModal();
+  });
+
+  document.querySelectorAll('.advanced-tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchAdvancedTab(btn.dataset.advTab));
+  });
+
+  document.getElementById('adv-review-incremental')?.addEventListener('click', () => {
+    setReviewMode(REVIEW_MODES.INCREMENTAL);
+  });
+  document.getElementById('adv-review-whole')?.addEventListener('click', () => {
+    setReviewMode(REVIEW_MODES.WHOLE);
+  });
+
+  document.getElementById('adv-save-template')?.addEventListener('click', () => {
+    const name = document.getElementById('adv-new-template-name').value.trim();
+    const body = syncEditorPlainText().trim();
+    if (!name) {
+      showToast('Enter a template name');
+      return;
+    }
+    if (!body) {
+      showToast('Write something in the editor first');
+      return;
+    }
+    advancedSettings.customTemplates.push({
+      id: `custom_${Date.now()}`,
+      name,
+      body,
+    });
+    document.getElementById('adv-new-template-name').value = '';
+    renderAdvancedTemplateList();
+    showToast('Template saved — click Save to persist');
+  });
+
+  document.getElementById('whats-new-close')?.addEventListener('click', closeWhatsNew);
 }
 
 // ---- Output language & model tier ----
@@ -1024,11 +1360,6 @@ function updateOutputPanel(el, text, emptyMessage) {
   }
 }
 
-function updateNewUpdatePanel(text) {
-  correctedText = text ?? '';
-  refreshUpdatePanel();
-}
-
 function scoreValueClass(val) {
   if (val === null || val === undefined) return '';
   if (val >= 75) return 'score-good';
@@ -1103,6 +1434,7 @@ async function runCorrectionOnly(text, requestId) {
   setFixing(true);
 
   try {
+    syncWritingContextToAI();
     if (!isAIReady()) {
       try {
         await initAI(getSelectedModelPref());
@@ -1527,7 +1859,7 @@ setModelChangeCallback((modelId) => {
 // ---- Setup wizard ----
 
 let setupStep = 0;
-const SETUP_STEPS = 6;
+const SETUP_STEPS = 7;
 let setupMandatory = false;
 let setupRequirementsPassed = false;
 let setupModelLoading = false;
@@ -1538,6 +1870,7 @@ let setupDraft = {
   colorTheme: 'light-default',
   darkMode: false,
   modelId: MODEL_CATALOG[0].id,
+  reviewMode: REVIEW_MODES.WHOLE,
 };
 let setupAppearanceSnapshot = null;
 
@@ -1835,6 +2168,31 @@ function renderSetupStep() {
   }
 
   if (setupStep === 4) {
+    setupTitle.textContent = 'How should updates appear?';
+    setupMessage.textContent =
+      'Choose whether to review AI suggestions one at a time or see the full corrected text.';
+    setupBody.innerHTML = `
+      <div class="setup-options">
+        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL ? 'selected' : ''}" id="setup-review-incremental" data-value="incremental">
+          <div><strong>Review each change</strong><span>Accept or reject suggestions one at a time</span></div>
+        </button>
+        <button type="button" class="setup-option ${setupDraft.reviewMode === REVIEW_MODES.WHOLE ? 'selected' : ''}" id="setup-review-whole" data-value="whole">
+          <div><strong>Replace whole text</strong><span>Show the full corrected version at once</span></div>
+        </button>
+      </div>
+      <p class="setup-hint">You can change this anytime in Advanced settings (gear icon in the header).</p>`;
+    document.getElementById('setup-review-incremental')?.addEventListener('click', () => {
+      setupDraft.reviewMode = REVIEW_MODES.INCREMENTAL;
+      syncReviewModeUI();
+    });
+    document.getElementById('setup-review-whole')?.addEventListener('click', () => {
+      setupDraft.reviewMode = REVIEW_MODES.WHOLE;
+      syncReviewModeUI();
+    });
+    return;
+  }
+
+  if (setupStep === 5) {
     setupTitle.textContent = 'Choose your look';
     setupMessage.textContent = 'Pick colors that are easy on your eyes. You can change these anytime.';
     setupBody.innerHTML = `
@@ -1884,7 +2242,7 @@ function renderSetupStep() {
     return;
   }
 
-  if (setupStep === 5) {
+  if (setupStep === 6) {
     setupTitle.textContent = 'Quick guide';
     setupMessage.textContent = 'A few things to know about your workspace.';
     setupBody.innerHTML = `
@@ -1894,11 +2252,12 @@ function renderSetupStep() {
         <li><strong>Export</strong> — Download all drafts & settings as a backup file</li>
         <li><strong>Import</strong> — Restore from a backup (replaces local data)</li>
         <li><strong>Delete All</strong> — Erase everything on this device</li>
+        <li><strong>Advanced</strong> — Templates, custom rules, dictionary, and blocked phrases (gear icon in header)</li>
         <li><strong>Change model</strong> — Pick a local model in the header (cached after first load)</li>
       </ul>`;
   }
 
-  if (setupStep >= 4) {
+  if (setupStep >= 5) {
     applySetupPreview();
   }
 }
@@ -1917,6 +2276,12 @@ function collectSetupStep() {
     setupDraft.mode = mode;
   }
   if (setupStep === 4) {
+    setupDraft.reviewMode =
+      setupDraft.reviewMode === REVIEW_MODES.INCREMENTAL
+        ? REVIEW_MODES.INCREMENTAL
+        : REVIEW_MODES.WHOLE;
+  }
+  if (setupStep === 5) {
     setupDraft.colorTheme = document.getElementById('setup-theme')?.value || 'light-default';
   }
 }
@@ -1931,6 +2296,7 @@ async function finishSetup() {
 
   setMode(setupDraft.mode);
   setOutputLanguage(setupDraft.outputLanguage || 'english');
+  setReviewMode(setupDraft.reviewMode || REVIEW_MODES.WHOLE);
 
   setSelectedModelPref(setupDraft.modelId);
   modelSelect.value = setupDraft.modelId;
@@ -1942,6 +2308,16 @@ async function finishSetup() {
   setupOverlay.hidden = true;
   updateSetupActions();
   showToast('Welcome to EditorPilot');
+  try {
+    const res = await fetch('./version.json', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      appVersion = data?.version || appVersion;
+      await showWhatsNewIfNeeded(data);
+    }
+  } catch {
+    /* optional */
+  }
 }
 
 function openSetupWizard(resetStep = false, mandatory = false) {
@@ -1956,6 +2332,7 @@ function openSetupWizard(resetStep = false, mandatory = false) {
       colorTheme,
       darkMode,
       modelId: getSelectedModelPref() !== 'auto' ? getSelectedModelPref() : MODEL_CATALOG[0].id,
+      reviewMode,
     };
     captureSetupAppearanceSnapshot();
   }
@@ -1994,7 +2371,7 @@ function bindSetupWizard() {
     if (setupModelLoading) return;
     if (setupStep > 0) {
       collectSetupStep();
-      if (setupStep === 4) {
+      if (setupStep === 5) {
         restoreSetupAppearanceSnapshot();
       }
       setupStep--;
@@ -2173,6 +2550,8 @@ function bindEvents() {
       if (focusMode) setFocusMode(false);
       if (!rewriteOverlay.hidden) closeRewriteModal();
       if (!donationModal.hidden) donationModal.hidden = true;
+      if (!advancedOverlay.hidden) advancedOverlay.hidden = true;
+      if (!whatsNewOverlay.hidden) closeWhatsNew();
       if (!legalOverlay.hidden) legalOverlay.hidden = true;
       if (setupMandatory && !setupOverlay.hidden) return;
     }
@@ -2335,9 +2714,10 @@ function bindEvents() {
 // ---- Bootstrap ----
 
 async function bootstrap() {
-  await checkAppVersion();
+  const versionData = await checkAppVersion();
 
   bindEvents();
+  bindAdvancedModal();
   bindPwaInstall();
   bindSetupWizard();
   initModelSelect();
@@ -2379,6 +2759,15 @@ async function bootstrap() {
     const savedFocus = await getPreference('focus_mode');
     setFocusMode(savedFocus === '1', false);
 
+    advancedSettings = await loadAdvancedSettings(getPreference);
+    syncWritingContextToAI();
+
+    const savedReview = await getPreference('review_mode');
+    if (savedReview === REVIEW_MODES.INCREMENTAL || savedReview === REVIEW_MODES.WHOLE) {
+      reviewMode = savedReview;
+    }
+    syncReviewModeUI();
+
     const savedModel = await getPreference('selected_model');
     if (savedModel) {
       setSelectedModelPref(savedModel);
@@ -2403,6 +2792,7 @@ async function bootstrap() {
         console.error('[ERROR]', err);
         showToast('Model failed to load — try a smaller model in the header');
       }
+      await showWhatsNewIfNeeded(versionData);
     }
 
     const docs = await getDocuments(1);
