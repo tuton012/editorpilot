@@ -236,7 +236,7 @@ export function shiftPendingChanges(changes, editEnd, delta) {
   });
 }
 
-/** Reject AI output that rewrites the text instead of correcting it. */
+/** Reject only obvious AI hallucinations ( huge unrelated rewrites / appends ). */
 export function isReasonableCorrection(original, corrected) {
   const o = String(original || '').trim();
   const c = String(corrected || '').trim();
@@ -245,15 +245,23 @@ export function isReasonableCorrection(original, corrected) {
 
   const clipped = clipCorrectionTarget(o, c);
   const lenRatio = clipped.length / Math.max(o.length, 1);
-  if (lenRatio > 1.25 || lenRatio < 0.35) return false;
 
-  const origTokens = tokenizeForReview(o).map((t) => t.text.toLowerCase());
-  const corrTokens = tokenizeForReview(clipped).map((t) => t.text.toLowerCase());
-  if (!corrTokens.length) return false;
+  if (lenRatio < 0.15) return false;
 
-  const origSet = new Set(origTokens);
-  const overlap = corrTokens.filter((w) => origSet.has(w)).length / corrTokens.length;
-  return overlap >= 0.45;
+  if (lenRatio > 2.5) {
+    const origWords = tokenizeForReview(o)
+      .map((t) => t.text.toLowerCase())
+      .filter((t) => /\w/.test(t));
+    const corrWords = tokenizeForReview(clipped)
+      .map((t) => t.text.toLowerCase())
+      .filter((t) => /\w/.test(t));
+    if (!corrWords.length) return false;
+    const origSet = new Set(origWords);
+    const overlap = corrWords.filter((w) => origSet.has(w)).length / corrWords.length;
+    if (overlap < 0.2) return false;
+  }
+
+  return true;
 }
 
 /** Word and punctuation change sets for accept/reject review mode. */
@@ -273,11 +281,9 @@ export function computeChangeSets(original, corrected) {
     ];
   }
   if (original.trim() === corrected.trim()) return [];
-  if (!isReasonableCorrection(original, corrected)) return [];
 
   const target = clipCorrectionTarget(original, corrected);
-  const changes = filterReviewChanges(buildWordLevelChanges(original, target), original);
-  return changes;
+  return filterReviewChanges(buildWordLevelChanges(original, target), original);
 }
 
 export function hasPendingReviewChanges(changes) {

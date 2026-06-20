@@ -641,14 +641,15 @@ function updateNewUpdatePanel(text) {
   if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
     const original = syncEditorPlainText();
     const target = clipCorrectionTarget(original, correctedText);
+    pendingChanges = computeChangeSets(original, target);
 
-    if (!isReasonableCorrection(original, target)) {
-      appendProcessingLog('warn', 'AI output ignored — too different from your text');
+    if (pendingChanges.length > 0) {
+      correctedText = target;
+    } else if (target.trim() !== original.trim() && !isReasonableCorrection(original, target)) {
+      appendProcessingLog('warn', 'AI output ignored — unrelated rewrite detected');
       correctedText = '';
-      pendingChanges = [];
     } else {
       correctedText = target;
-      pendingChanges = computeChangeSets(original, target);
     }
   } else {
     pendingChanges = [];
@@ -884,6 +885,21 @@ function renderProcessingLogPanel() {
   }
 }
 
+async function copyProcessingLog() {
+  const text = formatLogForDisplay(getProcessingLog());
+  if (!text || text.startsWith('No log entries')) {
+    showToast('Nothing to copy yet');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Log copied');
+  } catch (err) {
+    console.error('[ERROR]', err);
+    showToast('Copy failed — select the log text manually');
+  }
+}
+
 async function refreshDebugReportPreview() {
   const reportEl = document.getElementById('adv-debug-report');
   if (!reportEl) return;
@@ -1019,6 +1035,9 @@ function bindAdvancedModal() {
     clearProcessingLog();
     renderProcessingLogPanel();
     showToast('Processing log cleared');
+  });
+  document.getElementById('adv-log-copy')?.addEventListener('click', () => {
+    void copyProcessingLog();
   });
   document.getElementById('adv-copy-report')?.addEventListener('click', () => {
     void copyDebugReport();
@@ -1573,11 +1592,12 @@ async function runCorrectionOnly(text, requestId) {
     }
 
     if (modeFixed !== null) {
-      correctedText = modeFixed;
-      updateNewUpdatePanel(correctedText);
+      const rawLen = String(modeFixed ?? '').length;
+      updateNewUpdatePanel(modeFixed);
       appendProcessingLog('info', 'Correction complete', {
         mode: currentMode,
-        chars: correctedText.length,
+        chars: rawLen,
+        suggestions: pendingChanges.filter((c) => c.status === 'pending').length,
       });
     }
 

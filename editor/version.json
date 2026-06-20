@@ -1,8 +1,8 @@
 {
-  "version": "1.5.2",
+  "version": "1.5.3",
   "whatsNew": [
-    "Review each word no longer re-suggests the same word after you accept",
-    "AI text appended at the bottom is no longer offered as suggestions",
-    "Review queue stays stable until you finish or dismiss all changes"
+    "Typo and grammar fixes no longer blocked as too different from your text",
+    "Copy log button added in Advanced → Debug",
+    "Processing log shows suggestion count after each correction"
   ]
 }
