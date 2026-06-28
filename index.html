@@ -422,6 +422,11 @@
         }
 
         /* ── privacy banner ── */
+        #privacy {
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
         .privacy-banner {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -433,22 +438,28 @@
             justify-content: space-between;
             gap: 24px;
             box-shadow: var(--shadow-sm);
+            width: 100%;
         }
         .privacy-banner .privacy-text {
             display: flex;
             align-items: center;
             gap: 16px;
+            flex: 1 1 520px;
+            min-width: 0;
         }
         .privacy-banner .privacy-icon {
             font-size: 2.4rem;
+            flex: 0 0 auto;
         }
         .privacy-banner h3 {
             font-weight: 700;
             font-size: 1.2rem;
+            margin-bottom: 4px;
         }
         .privacy-banner p {
             color: var(--text-secondary);
             font-size: 0.95rem;
+            max-width: 720px;
         }
 
         /* ── cta ── */
@@ -891,6 +902,11 @@
     <!-- ═══ PRIVACY ═══ -->
     <section class="section" id="privacy">
         <div class="container">
+            <div class="section-header">
+                <h2>Privacy by default</h2>
+                <p>Your writing stays on your device from first draft to final edit.</p>
+            </div>
+
             <div class="privacy-banner">
                 <div class="privacy-text">
                     <span class="privacy-icon">🛡️</span>
