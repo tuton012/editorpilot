@@ -489,8 +489,8 @@ html[data-theme="dark"] .brand-tagline {
   background: var(--surface-muted);
   border-radius: 999px;
   border: 1px solid var(--border-soft);
-  width: max-content;
-  max-width: 100%;
+  width: fit-content;
+  min-width: 190px;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -2320,6 +2320,7 @@ html[data-theme="dark"] .app.focus-mode::after {
   .app.review-mode .panel-update { position: static; }
   .header { flex-wrap: wrap; gap: 16px; }
   .header-right { justify-content: flex-start; min-width: 0; }
+  .model-status { min-width: min(190px, calc(100vw - 24px)); max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
   .model-select { width: 240px; }
 }
 
