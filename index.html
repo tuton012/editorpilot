@@ -427,7 +427,7 @@
             border-top: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
         }
-        .privacy-banner {
+        .local-writing-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
@@ -440,23 +440,23 @@
             box-shadow: var(--shadow-sm);
             width: 100%;
         }
-        .privacy-banner .privacy-text {
+        .local-writing-card .privacy-text {
             display: flex;
             align-items: center;
             gap: 16px;
             flex: 1 1 520px;
             min-width: 0;
         }
-        .privacy-banner .privacy-icon {
+        .local-writing-card .privacy-icon {
             font-size: 2.4rem;
             flex: 0 0 auto;
         }
-        .privacy-banner h3 {
+        .local-writing-card h3 {
             font-weight: 700;
             font-size: 1.2rem;
             margin-bottom: 4px;
         }
-        .privacy-banner p {
+        .local-writing-card p {
             color: var(--text-secondary);
             font-size: 0.95rem;
             max-width: 720px;
@@ -702,12 +702,13 @@
             .hero-stats {
                 gap: 24px;
             }
-            .privacy-banner {
+            .local-writing-card {
                 padding: 28px 24px;
                 flex-direction: column;
                 text-align: center;
             }
-            .privacy-banner .privacy-text {
+            .local-writing-card .privacy-text {
+                flex: 1 1 auto;
                 flex-direction: column;
             }
             .cta-section {
@@ -763,7 +764,8 @@
                 <a href="#how-it-works">How It Works</a>
                 <a href="#privacy">Privacy</a>
                 <a href="#requirements">Requirements</a>
-                <a href="/editor" class="nav-cta">
+                <a href="https://github.com/tuton012/editorpilot" target="_blank" rel="noopener noreferrer">Star on GitHub</a>
+                <a href="/editor/" class="nav-cta">
                     <span class="btn btn-primary">Get Started</span>
                 </a>
             </nav>
@@ -793,7 +795,7 @@
             </p>
 
             <div class="hero-actions">
-                <a href="/editor" class="btn btn-primary btn-large">Try EditorPilot &nbsp;→</a>
+                <a href="/editor/" class="btn btn-primary btn-large">Try EditorPilot &nbsp;→</a>
                 <a href="#features" class="btn btn-outline btn-large">Explore features</a>
             </div>
 
@@ -907,7 +909,7 @@
                 <p>Your writing stays on your device from first draft to final edit.</p>
             </div>
 
-            <div class="privacy-banner">
+            <div class="local-writing-card">
                 <div class="privacy-text">
                     <span class="privacy-icon">🛡️</span>
                     <div>
@@ -915,7 +917,7 @@
                         <p>EditorPilot runs entirely in your browser using local AI models. Nothing you write is ever sent to a server, stored, or shared. No accounts, no tracking, no surprises.</p>
                     </div>
                 </div>
-                <a href="/editor" class="btn btn-primary">Start writing privately</a>
+                <a href="/editor/" class="btn btn-primary">Start writing privately</a>
             </div>
         </div>
     </section>
@@ -959,7 +961,7 @@
             <div class="cta-section">
                 <h2>Ready to write better?</h2>
                 <p>Open EditorPilot in your browser and start improving your writing immediately. No installation, no registration, no cost.</p>
-                <a href="/editor" class="btn btn-primary btn-large">Launch EditorPilot &nbsp;→</a>
+                <a href="/editor/" class="btn btn-primary btn-large">Launch EditorPilot &nbsp;→</a>
                 <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted);">
                     ✨ Completely free · Runs offline
                 </p>
@@ -972,6 +974,8 @@
         <div class="container">
             <div class="footer-copy">
                 © 2026 <strong>EditorPilot</strong> · Carlos I
+                <span aria-hidden="true"> · </span>
+                <a href="https://github.com/tuton012/editorpilot" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
         </div>
     </footer>

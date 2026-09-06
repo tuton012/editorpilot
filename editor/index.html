@@ -152,7 +152,7 @@
           <section class="panel card panel-write">
             <div class="panel-header panel-header-write">
               <div class="panel-title-row">
-                <h2>Write Here</h2>
+                <h2>Your draft</h2>
                 <div class="write-toolbar">
                   <button type="button" class="btn btn-sm" id="btn-clear">Clear</button>
                   <button type="button" class="btn btn-sm" id="btn-undo">Undo</button>
@@ -179,9 +179,10 @@
                 <button type="button" class="format-btn" id="btn-italic" aria-pressed="false" title="Italic"><em>I</em></button>
               </div>
             </div>
+            <p class="panel-hint panel-hint-block focus-hint">Underlined words have suggestions. Click one to review it. Press Esc to exit focus.</p>
             <div class="editor-wrap">
               <textarea id="plain-text-sync" class="plain-text-sync" aria-hidden="true" tabindex="-1" readonly></textarea>
-              <div id="editor" class="editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Writing area" data-placeholder="Type your notes, emails, or messages here…"></div>
+              <div id="editor" class="editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Writing area" data-placeholder="Start with a thought. Shape it into something clear."></div>
             </div>
           </section>
 
@@ -237,6 +238,8 @@
         <span class="footer-sep" aria-hidden="true">·</span>
         <button type="button" class="footer-link" data-legal="shortcuts">Shortcuts</button>
         <span class="footer-sep" aria-hidden="true">·</span>
+        <a class="footer-link" href="https://github.com/tuton012/editorpilot" target="_blank" rel="noopener noreferrer">Star on GitHub</a>
+        <span class="footer-sep" aria-hidden="true">&middot;</span>
         <button type="button" class="footer-link" id="btn-donate">Donate to the project</button>
       </nav>
       <p class="footer-copy" id="footer-copy">© EditorPilot · <a href="https://editorpilot.com" class="footer-site-link" target="_blank" rel="noopener noreferrer">editorpilot.com</a> · Carlos I</p>

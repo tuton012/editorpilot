@@ -239,6 +239,7 @@ let ignoredPatterns = new Set();
 let activeIssueId = null;
 let aiTaskRunning = false;
 let focusMode = false;
+let editorComposing = false;
 let compareMode = false;
 
 let debounceTimer = null;
@@ -422,6 +423,7 @@ function toggleCompareMode() {
 }
 
 function refreshUpdatePanel() {
+  appRoot.classList.toggle('review-mode', reviewMode === REVIEW_MODES.INCREMENTAL);
   if (reviewMode === REVIEW_MODES.INCREMENTAL) {
     renderReviewPanel();
     return;
@@ -701,7 +703,10 @@ function setFocusMode(on, persist = true) {
 
   if (on) {
     editor.focus();
+    scheduleLocalHighlights();
   }
+  document.querySelectorAll('.header, .site-footer, .mode-bar, .action-bar, .panel-update').forEach((el) => { el.inert = on; });
+  hideIssuePopup();
 
   if (persist) {
     setPreference('focus_mode', on ? '1' : '0').catch((err) => console.error('[ERROR]', err));
@@ -1338,7 +1343,7 @@ export function renderHighlights(issues, force = false) {
   const filtered = filterIssues(issues, text);
   grammarIssues = filtered;
 
-  if (!force && document.activeElement === editor) {
+  if (editorComposing || (!force && document.activeElement === editor)) {
     return;
   }
 
@@ -1404,6 +1409,8 @@ export function acceptSuggestion(issueId) {
     });
 
   setEditorPlainText(newText);
+  pendingChanges = [];
+  updateNewUpdatePanel('');
   renderHighlights(grammarIssues, true);
   hideIssuePopup();
   scheduleDebouncedAI();
@@ -1462,8 +1469,8 @@ function showIssuePopup(issue, x, y) {
   popupExplanation.textContent = issue.explanation || issue.type;
 
   issuePopup.hidden = false;
-  issuePopup.style.left = `${Math.min(x, window.innerWidth - 320)}px`;
-  issuePopup.style.top = `${Math.min(y + 8, window.innerHeight - 180)}px`;
+  issuePopup.style.left = `${Math.max(12, Math.min(x, window.innerWidth - issuePopup.offsetWidth - 12))}px`;
+  issuePopup.style.top = `${Math.max(12, Math.min(y + 8, window.innerHeight - issuePopup.offsetHeight - 12))}px`;
 
   editor.querySelectorAll('.grammar-issue').forEach((el) => {
     el.classList.toggle('active', el.dataset.issueId === issue.id);
@@ -1664,13 +1671,15 @@ function scheduleDebouncedAI() {
 function scheduleLocalHighlights() {
   clearTimeout(highlightTimer);
   highlightTimer = setTimeout(() => {
-    if (document.activeElement === editor) return;
+    if (editorComposing || (!focusMode && document.activeElement === editor)) return;
+    const selection = window.getSelection();
+    if (document.activeElement === editor && selection && !selection.isCollapsed) return;
     const text = syncEditorPlainText();
     if (text.length >= MIN_TEXT_LENGTH) {
       renderHighlights(analyzeGrammarIssuesLocal(text), true);
       updateScores(text);
     }
-  }, HIGHLIGHT_DEBOUNCE_MS);
+  }, focusMode ? 700 : HIGHLIGHT_DEBOUNCE_MS);
 }
 
 // ---- Autosave ----
@@ -2623,8 +2632,10 @@ function bindPwaInstall() {
 // ---- Event bindings ----
 
 function bindEvents() {
+  editor.addEventListener('compositionstart', () => { editorComposing = true; });
+  editor.addEventListener('compositionend', () => { editorComposing = false; scheduleLocalHighlights(); });
   editor.addEventListener('focus', () => {
-    if (!editor.querySelector('.grammar-issue')) return;
+    if (focusMode || !editor.querySelector('.grammar-issue')) return;
     const offset = getCaretOffset(editor);
     const text = syncEditorPlainText();
     editor.textContent = text;
@@ -2632,6 +2643,8 @@ function bindEvents() {
   });
 
   editor.addEventListener('input', () => {
+    hideIssuePopup();
+    scheduleLocalHighlights();
     syncEditorPlainText();
     updateDocStats(syncEditorPlainText());
     if (compareMode && correctedText) refreshUpdatePanel();
