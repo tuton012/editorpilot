@@ -240,6 +240,8 @@ let activeIssueId = null;
 let aiTaskRunning = false;
 let focusMode = false;
 let editorComposing = false;
+let correctionSource = '';
+let focusAIChanges = [];
 let compareMode = false;
 
 let debounceTimer = null;
@@ -450,6 +452,8 @@ function syncWritingContextToAI() {
 }
 
 function renderReviewPanel() {
+  appRoot.classList.toggle('review-mode', reviewMode === REVIEW_MODES.INCREMENTAL);
+  if (focusMode) scheduleLocalHighlights();
   const pending = pendingChanges.filter((c) => c.status === 'pending');
 
   if (!pending.length && !correctedText) {
@@ -472,7 +476,7 @@ function renderReviewPanel() {
         <div class="review-item-text">
           ${
             change.original
-              ? `<span class="review-original">${escapeHtml(change.original)}</span>`
+              ? `<span class="review-original">${escapeHtml(change.original.trim() ? change.original : '(space)')}</span>`
               : ''
           }
           ${
@@ -482,7 +486,7 @@ function renderReviewPanel() {
           }
           ${
             change.suggested
-              ? `<span class="review-suggested">${escapeHtml(change.suggested)}</span>`
+              ? `<span class="review-suggested">${escapeHtml(change.suggested.trim() ? change.suggested : '(space)')}</span>`
               : '<span class="review-suggested review-muted">(remove)</span>'
           }
         </div>
@@ -633,17 +637,32 @@ function syncReviewModeUI(mode = reviewMode) {
   document.getElementById('setup-review-whole')?.classList.toggle('selected', !incremental);
 }
 
+function combineInsertions(changes) {
+  const result = [];
+  for (const change of changes) {
+    const previous = result.at(-1);
+    if (change.type === 'insert' && previous?.type === 'insert' && change.startIndex === previous.startIndex) {
+      previous.suggested += change.suggested;
+    } else {
+      result.push({ ...change });
+    }
+  }
+  return result;
+}
+
 function updateNewUpdatePanel(text) {
   if (reviewMode === REVIEW_MODES.INCREMENTAL && hasPendingReviewChanges(pendingChanges)) {
     refreshUpdatePanel();
     return;
   }
 
+  correctionSource = syncEditorPlainText();
   correctedText = text ?? '';
+  focusAIChanges = correctedText ? computeChangeSets(correctionSource, clipCorrectionTarget(correctionSource, correctedText)) : [];
   if (reviewMode === REVIEW_MODES.INCREMENTAL && correctedText) {
     const original = syncEditorPlainText();
     const target = clipCorrectionTarget(original, correctedText);
-    pendingChanges = computeChangeSets(original, target);
+    pendingChanges = combineInsertions(computeChangeSets(original, target));
 
     if (pendingChanges.length > 0) {
       correctedText = target;
@@ -657,6 +676,7 @@ function updateNewUpdatePanel(text) {
     pendingChanges = [];
   }
   refreshUpdatePanel();
+  if (focusMode) scheduleLocalHighlights();
 }
 
 function isModKey(e) {
@@ -1338,6 +1358,38 @@ function filterIssues(issues, text) {
  * Render grammar issue highlights inside the contenteditable editor.
  * Skips DOM updates while typing (focused) to keep the caret stable.
  */
+function getFocusIssues(text) {
+  const changes = reviewMode === REVIEW_MODES.INCREMENTAL
+    ? pendingChanges
+    : (text === correctionSource ? focusAIChanges : []);
+  const grouped = [];
+  for (const change of changes.filter((c) => c.status === 'pending')) {
+    const previous = grouped.at(-1);
+    if (change.type === 'insert' && previous?.type === 'insert' && change.startIndex === previous.startIndex) {
+      previous.suggested += change.suggested;
+      previous.ids.push(change.id);
+    } else {
+      grouped.push({ ...change, ids: [change.id] });
+    }
+  }
+  const aiIssues = grouped.map((c) => ({
+    id: `ai-${c.id}`,
+    reviewChangeIds: reviewMode === REVIEW_MODES.INCREMENTAL ? c.ids : null,
+    startIndex: c.startIndex,
+    endIndex: c.endIndex,
+    originalText: c.original,
+    suggestion: c.suggested,
+    type: c.type,
+    explanation: c.type === 'insert' ? 'Add this at the underlined position.' : 'Suggested improvement to your draft.',
+    // An insertion has no original characters: underline its neighboring word.
+    displayStart: c.startIndex === c.endIndex ? Math.max(0, c.startIndex - (text.slice(0, c.startIndex).match(/\S+\s*$/)?.[0].length || 0)) : c.startIndex,
+    displayEnd: c.startIndex === c.endIndex ? Math.min(text.length, Math.max(c.endIndex, 1)) : c.endIndex,
+  }));
+  const local = analyzeGrammarIssuesLocal(text).filter((issue) => !aiIssues.some((ai) =>
+    issue.startIndex < ai.displayEnd && issue.endIndex > ai.displayStart));
+  return [...aiIssues, ...local];
+}
+
 export function renderHighlights(issues, force = false) {
   const text = plainTextSync.value || syncEditorPlainText();
   const filtered = filterIssues(issues, text);
@@ -1358,10 +1410,12 @@ export function renderHighlights(issues, force = false) {
   let cursor = 0;
 
   for (const issue of filtered) {
-    if (issue.startIndex < cursor) continue;
-    html += escapeHtml(text.slice(cursor, issue.startIndex));
-    html += `<span class="grammar-issue" data-issue-id="${escapeHtml(issue.id)}" title="${escapeHtml(issue.suggestion)}">${escapeHtml(text.slice(issue.startIndex, issue.endIndex))}</span>`;
-    cursor = issue.endIndex;
+    const start = issue.displayStart ?? issue.startIndex;
+    const end = issue.displayEnd ?? issue.endIndex;
+    if (start < cursor) continue;
+    html += escapeHtml(text.slice(cursor, start));
+    html += `<span class="grammar-issue" data-issue-id="${escapeHtml(issue.id)}" title="${escapeHtml(issue.suggestion)}">${escapeHtml(text.slice(start, end))}</span>`;
+    cursor = end;
   }
 
   html += escapeHtml(text.slice(cursor));
@@ -1388,6 +1442,12 @@ export function acceptSuggestion(issueId) {
   const text = syncEditorPlainText();
   const issue = grammarIssues.find((i) => i.id === issueId);
   if (!issue) return text;
+  if (issue.reviewChangeIds) {
+    issue.reviewChangeIds.forEach((id) => resolveChange(id, true));
+    hideIssuePopup();
+    return syncEditorPlainText();
+  }
+  if (text.slice(issue.startIndex, issue.endIndex) !== issue.originalText) return text;
 
   const before = text.slice(0, issue.startIndex);
   const after = text.slice(issue.endIndex);
@@ -1425,6 +1485,11 @@ export function acceptSuggestion(issueId) {
 export function ignoreSuggestion(issueId) {
   const issue = grammarIssues.find((i) => i.id === issueId);
   if (!issue) return;
+  if (issue.reviewChangeIds) {
+    issue.reviewChangeIds.forEach((id) => resolveChange(id, false));
+    hideIssuePopup();
+    return;
+  }
 
   const key = `${issue.originalText}::${issue.suggestion}`;
   ignoredPatterns.add(key);
@@ -1464,7 +1529,7 @@ export function acceptAllSuggestions() {
 
 function showIssuePopup(issue, x, y) {
   activeIssueId = issue.id;
-  popupOriginal.textContent = issue.originalText;
+  popupOriginal.textContent = issue.originalText || 'Insert here';
   popupSuggestion.textContent = `→ ${issue.suggestion}`;
   popupExplanation.textContent = issue.explanation || issue.type;
 
@@ -1676,7 +1741,7 @@ function scheduleLocalHighlights() {
     if (document.activeElement === editor && selection && !selection.isCollapsed) return;
     const text = syncEditorPlainText();
     if (text.length >= MIN_TEXT_LENGTH) {
-      renderHighlights(analyzeGrammarIssuesLocal(text), true);
+      renderHighlights(focusMode ? getFocusIssues(text) : analyzeGrammarIssuesLocal(text), true);
       updateScores(text);
     }
   }, focusMode ? 700 : HIGHLIGHT_DEBOUNCE_MS);
@@ -2657,7 +2722,7 @@ function bindEvents() {
   editor.addEventListener('blur', () => {
     const text = syncEditorPlainText();
     if (text.length >= MIN_TEXT_LENGTH) {
-      renderHighlights(analyzeGrammarIssuesLocal(text), true);
+      renderHighlights(focusMode ? getFocusIssues(text) : analyzeGrammarIssuesLocal(text), true);
     }
   });
 

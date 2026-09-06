@@ -2325,3 +2325,27 @@ html[data-theme="dark"] .app.focus-mode::after {
 
 body:has(.app.focus-mode) { overflow: hidden; }
 body:has(.app.focus-mode) .offline-hint { display: none; }
+
+/* Suggestions use a fixed-width rail, independent of saved review preferences. */
+.panels { grid-template-columns: minmax(0, 1fr) 360px; }
+.app.review-mode .panels { grid-template-columns: minmax(0, 1fr) 360px; }
+.panel-update { align-self: start; min-width: 0; }
+.panel-update .panel-header { gap: 14px; padding: 20px; }
+.panel-update .panel-header-actions { gap: 8px; }
+.corrected-output:has(.review-shell) { white-space: normal; font-family: var(--font) !important; font-size: 14px !important; padding: 16px; }
+.review-item-text { white-space: normal; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+.review-original, .review-suggested { white-space: pre-wrap; overflow-wrap: anywhere; padding: 4px 8px; border-radius: 5px; }
+.review-original { color: #a5263b; background: #fff0f2; text-decoration: line-through; }
+.review-suggested { color: #14613d; background: #e5f7eb; font-weight: 600; }
+.review-item { flex: 0 0 auto; border-left: 3px solid var(--accent); border-radius: 10px; padding: 16px; box-shadow: 0 2px 6px rgb(0 0 0 / 4%); }
+.review-item-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.review-item-actions .btn, .review-toolbar-actions .btn, .issue-actions .btn { min-height: 40px; padding: 9px 14px; font: 600 13px var(--font); border-radius: 7px; }
+.review-accept, #review-accept-all, #popup-accept { background: #2563eb; border-color: #2563eb; color: white; }
+.review-accept:hover, #review-accept-all:hover, #popup-accept:hover { background: #1d4ed8; color: white; }
+.review-reject { border-color: var(--text-muted); color: var(--text); }
+.review-toolbar { flex-wrap: wrap; }
+.review-list { max-height: max(240px, calc(100dvh - 400px)); }
+.app.review-mode #btn-compare { display: none; }
+@media (max-width: 800px) {
+  .panels, .app.review-mode .panels { grid-template-columns: minmax(0, 1fr); }
+}

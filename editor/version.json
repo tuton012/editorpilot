@@ -1,8 +1,8 @@
 {
-  "version": "1.5.3",
+  "version": "1.5.4",
   "whatsNew": [
-    "Typo and grammar fixes no longer blocked as too different from your text",
-    "Copy log button added in Advanced → Debug",
-    "Processing log shows suggestion count after each correction"
+    "Compact suggestions sidebar with clearer Accept and Reject buttons",
+    "AI suggestions are underlined in focus mode, including missing words",
+    "Updated asset caching keeps editor styling in sync"
   ]
 }
