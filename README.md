@@ -33,7 +33,7 @@ EditorPilot is designed so your writing stays with you. Core editing happens loc
 
 - A modern browser with WebGPU support
 - HTTPS or localhost when running locally
-- Internet access on first use so the AI model can download and cache, unless you install a local model bundle
+- Local model files in `model/`, plus WebGPU support in the browser
 - Enough device storage and memory for local model files
 
 ## Support The Project
@@ -53,7 +53,7 @@ Thank you to the people and teams behind the open web technologies that make thi
 - WebLLM / MLC for local in-browser language models
 - SQLite WASM + OPFS for on-device persistence
 - WebGPU for fast local inference
-- Qwen, Gemma, and other open model communities distributed through MLC
+- Qwen models converted to MLC format for local browser inference
 - Everyone building privacy-respecting tools for the web
 
 ## Run Locally
@@ -78,7 +78,13 @@ http://localhost:8000/editor/
 
 ## Local Models
 
-The editor supports model bundles stored in the repository's root `model/` folder. Qwen2.5 3B Instruct q4f16 is the recommended local bundle for grammar correction. Qwen2.5 7B Instruct q4f16 is the Power Model for the best local quality.
+EditorPilot uses only model records defined in `editor/ai.js`. It does not use WebLLM's online model catalog. Model weights, tokenizer files, and WebGPU runtime libraries are served from the repository's root `model/` folder.
+
+The model choices are:
+
+- **Basic Model** — Qwen2.5 1.5B; lowest memory use
+- **Plus Model** — Qwen2.5 3B; recommended for grammar correction
+- **Power Model** — Qwen2.5 7B; highest local grammar and rewriting quality, requiring about 6 GB of available GPU memory
 
 Install the Hugging Face CLI, then download the MLC WebGPU bundle into the exact folder below:
 
@@ -88,11 +94,22 @@ hf download mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-3B
 
 Choose `Plus Model` in the editor. The bundle files are stored under `resolve/main/` because WebLLM uses Hugging Face's repository layout. The WebGPU runtime library is also expected locally in `model/runtime/`; the model weights and runtime are never loaded from an online model catalog.
 
+Download the Plus Model runtime library:
+
+```powershell
+New-Item -ItemType Directory -Force .\model\runtime
+Invoke-WebRequest -UseBasicParsing `
+	-Uri "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_84/base/Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm" `
+	-OutFile ".\model\runtime\Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm"
+```
+
 For the Power Model, download Qwen2.5 7B Instruct q4f16:
 
 ```powershell
 hf download mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-7B-Instruct-q4f16_1-MLC"
 ```
+
+When using the setup wizard, **Review each word** is selected by default. This enables accepting or rejecting individual grammar and punctuation changes instead of replacing the entire draft at once. Existing saved preferences are preserved.
 
 ## Project Structure
 
@@ -100,6 +117,7 @@ hf download mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-7B
 .
 |-- index.html          # Landing page
 |-- logo.png            # App logo
+|-- model/              # Local model weights and runtime libraries
 |-- _headers            # Hosting/security headers
 `-- editor/             # Main EditorPilot app
 ```
