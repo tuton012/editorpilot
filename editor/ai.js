@@ -20,16 +20,16 @@ export const MAX_HIGHLIGHT_LENGTH = 2000;
 
 export const AVAILABLE_MODELS = [
   { id: 'auto', label: 'Auto (recommended)' },
-  { id: LOCAL_QWEN_1_5B_MODEL_ID, label: 'Qwen 1.5B (local)' },
-  { id: LOCAL_QWEN_3B_MODEL_ID, label: 'Qwen 3B (local)' },
-  { id: LOCAL_QWEN_7B_MODEL_ID, label: 'Qwen 7B (local)' },
+  { id: LOCAL_QWEN_1_5B_MODEL_ID, label: 'Basic Model' },
+  { id: LOCAL_QWEN_3B_MODEL_ID, label: 'Plus Model' },
+  { id: LOCAL_QWEN_7B_MODEL_ID, label: 'Power Model' },
 ];
 
 /** User-facing model catalog for setup and model picker. */
 export const MODEL_CATALOG = [
   {
     id: LOCAL_QWEN_1_5B_MODEL_ID,
-    label: 'Qwen 1.5B (local)',
+    label: 'Basic Model',
     size: '~1.0 GB',
     description: 'Local fallback for modest GPUs.',
     languages: 'Many languages',
@@ -38,7 +38,7 @@ export const MODEL_CATALOG = [
   },
   {
     id: LOCAL_QWEN_3B_MODEL_ID,
-    label: 'Qwen 3B (local)',
+    label: 'Plus Model',
     size: '~2.5 GB',
     description: 'Recommended local grammar model with stronger correction quality.',
     languages: 'Many languages',
@@ -47,9 +47,9 @@ export const MODEL_CATALOG = [
   },
   {
     id: LOCAL_QWEN_7B_MODEL_ID,
-    label: 'Qwen 7B (local)',
+    label: 'Power Model',
     size: '~5.1 GB',
-    description: 'Highest-quality local grammar and rewriting model.',
+    description: 'Best local grammar and rewriting quality. Requires a strong GPU with about 6 GB available memory.',
     languages: 'Many languages',
     tier: 'heavy',
     local: true,
@@ -59,17 +59,17 @@ export const MODEL_CATALOG = [
 const LOCAL_MODEL_CONFIGS = [
   {
     model_id: LOCAL_QWEN_1_5B_MODEL_ID,
-    model: new URL('../model/Qwen2.5-1.5B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model: new URL('../model/Qwen2.5-1.5B-Instruct-q4f16_1-MLC/resolve/main/', import.meta.url).href,
     model_lib: new URL('../model/runtime/Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
   },
   {
     model_id: LOCAL_QWEN_3B_MODEL_ID,
-    model: new URL('../model/Qwen2.5-3B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model: new URL('../model/Qwen2.5-3B-Instruct-q4f16_1-MLC/resolve/main/', import.meta.url).href,
     model_lib: new URL('../model/runtime/Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
   },
   {
     model_id: LOCAL_QWEN_7B_MODEL_ID,
-    model: new URL('../model/Qwen2.5-7B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model: new URL('../model/Qwen2.5-7B-Instruct-q4f16_1-MLC/resolve/main/', import.meta.url).href,
     model_lib: new URL('../model/runtime/Qwen2-7B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
   },
 ];

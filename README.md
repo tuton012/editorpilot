@@ -78,7 +78,7 @@ http://localhost:8000/editor/
 
 ## Local Models
 
-The editor supports multiple model bundles stored in the repository's root `model/` folder. Qwen2.5 3B Instruct q4f16 is the recommended local bundle for grammar correction; Qwen2.5 7B Instruct q4f16 is the quality-first option.
+The editor supports model bundles stored in the repository's root `model/` folder. Qwen2.5 3B Instruct q4f16 is the recommended local bundle for grammar correction. Qwen2.5 7B Instruct q4f16 is the Power Model for the best local quality.
 
 Install the Hugging Face CLI, then download the MLC WebGPU bundle into the exact folder below:
 
@@ -86,9 +86,9 @@ Install the Hugging Face CLI, then download the MLC WebGPU bundle into the exact
 hf download mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-3B-Instruct-q4f16_1-MLC"
 ```
 
-Choose `Qwen 3B (local)` in the editor. The folder must contain `mlc-chat-config.json`, tokenizer files, and model shards. The WebGPU runtime library is also expected locally in `model/runtime/`; the model weights and runtime are never loaded from an online model catalog.
+Choose `Plus Model` in the editor. The bundle files are stored under `resolve/main/` because WebLLM uses Hugging Face's repository layout. The WebGPU runtime library is also expected locally in `model/runtime/`; the model weights and runtime are never loaded from an online model catalog.
 
-Quality-first option:
+For the Power Model, download Qwen2.5 7B Instruct q4f16:
 
 ```powershell
 hf download mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-7B-Instruct-q4f16_1-MLC"

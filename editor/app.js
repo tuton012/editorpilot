@@ -229,7 +229,7 @@ let undoInputTimer = null;
 let currentMode = 'grammar';
 let currentDocId = null;
 let correctedText = '';
-let reviewMode = REVIEW_MODES.WHOLE;
+let reviewMode = REVIEW_MODES.INCREMENTAL;
 let pendingChanges = [];
 let advancedSettings = defaultAdvancedSettings();
 let appVersion = '';
@@ -2075,7 +2075,7 @@ setModelChangeCallback((modelId) => {
   modelCacheStatus[modelId] = true;
   setPreference('selected_model', modelId).catch((err) => console.error('[ERROR]', err));
   void refreshModelCacheIndicators();
-  showToast('Switched to Qwen 0.5B — lighter on GPU memory');
+  showToast('Model changed');
 });
 
 // ---- Setup wizard ----
@@ -2092,7 +2092,7 @@ let setupDraft = {
   colorTheme: 'light-default',
   darkMode: false,
   modelId: MODEL_CATALOG[0].id,
-  reviewMode: REVIEW_MODES.WHOLE,
+  reviewMode: REVIEW_MODES.INCREMENTAL,
 };
 let setupAppearanceSnapshot = null;
 
