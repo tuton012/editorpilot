@@ -27,7 +27,7 @@ import {
   isMultilingualCapableModel,
   isAIReady,
   detectLanguageHeuristic,
-  LOCAL_QWEN_3B_MODEL_ID,
+  PLUS_MODEL_ID,
   APP_NAME,
   MIN_TEXT_LENGTH,
   MAX_CORRECTION_LENGTH,
@@ -1168,10 +1168,10 @@ function syncModelForLanguage() {
   });
 
   if (needsMultilingual && !isMultilingualCapableModel(modelSelect.value)) {
-    modelSelect.value = LOCAL_QWEN_3B_MODEL_ID;
-    setSelectedModelPref(LOCAL_QWEN_3B_MODEL_ID);
-    switchModel(LOCAL_QWEN_3B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    setPreference('selected_model', LOCAL_QWEN_3B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    modelSelect.value = PLUS_MODEL_ID;
+    setSelectedModelPref(PLUS_MODEL_ID);
+    switchModel(PLUS_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    setPreference('selected_model', PLUS_MODEL_ID).catch((err) => console.error('[ERROR]', err));
     showToast('This language uses the local Qwen 3B model');
   }
 }
@@ -2993,11 +2993,13 @@ async function bootstrap() {
     syncReviewModeUI();
 
     const savedModel = await getPreference('selected_model');
-    if (savedModel) {
+    const validSavedModel = AVAILABLE_MODELS.some((model) => model.id === savedModel);
+    if (validSavedModel) {
       setSelectedModelPref(savedModel);
       modelSelect.value = savedModel;
     } else {
-      modelSelect.value = getSelectedModelPref();
+      setSelectedModelPref('auto');
+      modelSelect.value = 'auto';
     }
     lastModelSelectValue = modelSelect.value;
     void refreshModelCacheIndicators();

@@ -78,7 +78,7 @@ http://localhost:8000/editor/
 
 ## Local Models
 
-EditorPilot uses only model records defined in `editor/ai.js`. It does not use WebLLM's online model catalog. Model weights, tokenizer files, and WebGPU runtime libraries are served from the repository's root `model/` folder.
+EditorPilot uses model records defined in `editor/ai.js`. On localhost, it loads model weights and runtime libraries from the repository's `model/` folder. On the hosted domain, Cloudflare Pages excludes the large local files and WebLLM downloads the selected model into the browser cache on first use.
 
 The model choices are:
 
@@ -92,7 +92,7 @@ Install the Hugging Face CLI, then download the MLC WebGPU bundle into the exact
 hf download mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-3B-Instruct-q4f16_1-MLC"
 ```
 
-Choose `Plus Model` in the editor. The bundle files are stored under `resolve/main/` because WebLLM uses Hugging Face's repository layout. The WebGPU runtime library is also expected locally in `model/runtime/`; the model weights and runtime are never loaded from an online model catalog.
+Choose `Plus Model` in the editor. On localhost, bundle files are stored under `resolve/main/` because WebLLM uses Hugging Face's repository layout, and the WebGPU runtime library is served from `model/runtime/`. On the hosted domain, the equivalent model and runtime are downloaded and cached by the browser.
 
 Download the Plus Model runtime library:
 
@@ -110,6 +110,8 @@ hf download mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-7B
 ```
 
 When using the setup wizard, **Review each word** is selected by default. This enables accepting or rejecting individual grammar and punctuation changes instead of replacing the entire draft at once. Existing saved preferences are preserved.
+
+Cloudflare Pages uses `.cfignore` to exclude the local `model/` directory because Pages limits individual files to 25 MiB. This does not affect localhost, where the local bundles remain available.
 
 ## Project Structure
 

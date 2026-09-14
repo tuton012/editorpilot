@@ -7,11 +7,20 @@ import * as webllm from 'https://esm.run/@mlc-ai/web-llm';
 export const LOCAL_QWEN_1_5B_MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC-local';
 export const LOCAL_QWEN_3B_MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC-local';
 export const LOCAL_QWEN_7B_MODEL_ID = 'Qwen2.5-7B-Instruct-q4f16_1-MLC-local';
+export const HOSTED_QWEN_1_5B_MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+export const HOSTED_QWEN_3B_MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+export const HOSTED_QWEN_7B_MODEL_ID = 'Qwen2.5-7B-Instruct-q4f16_1-MLC';
+
+const USE_LOCAL_MODELS = /^(localhost|127\.0\.0\.1|::1)$/i.test(window.location.hostname);
+export const PLUS_MODEL_ID = USE_LOCAL_MODELS ? LOCAL_QWEN_3B_MODEL_ID : HOSTED_QWEN_3B_MODEL_ID;
 
 export const MULTILINGUAL_MODEL_IDS = new Set([
   LOCAL_QWEN_1_5B_MODEL_ID,
   LOCAL_QWEN_3B_MODEL_ID,
   LOCAL_QWEN_7B_MODEL_ID,
+  HOSTED_QWEN_1_5B_MODEL_ID,
+  HOSTED_QWEN_3B_MODEL_ID,
+  HOSTED_QWEN_7B_MODEL_ID,
 ]);
 export const APP_NAME = 'EditorPilot';
 export const MIN_TEXT_LENGTH = 3;
@@ -20,13 +29,13 @@ export const MAX_HIGHLIGHT_LENGTH = 2000;
 
 export const AVAILABLE_MODELS = [
   { id: 'auto', label: 'Auto (recommended)' },
-  { id: LOCAL_QWEN_1_5B_MODEL_ID, label: 'Basic Model' },
-  { id: LOCAL_QWEN_3B_MODEL_ID, label: 'Plus Model' },
-  { id: LOCAL_QWEN_7B_MODEL_ID, label: 'Power Model' },
+  { id: USE_LOCAL_MODELS ? LOCAL_QWEN_1_5B_MODEL_ID : HOSTED_QWEN_1_5B_MODEL_ID, label: 'Basic Model' },
+  { id: USE_LOCAL_MODELS ? LOCAL_QWEN_3B_MODEL_ID : HOSTED_QWEN_3B_MODEL_ID, label: 'Plus Model' },
+  { id: USE_LOCAL_MODELS ? LOCAL_QWEN_7B_MODEL_ID : HOSTED_QWEN_7B_MODEL_ID, label: 'Power Model' },
 ];
 
 /** User-facing model catalog for setup and model picker. */
-export const MODEL_CATALOG = [
+const LOCAL_MODEL_CATALOG = [
   {
     id: LOCAL_QWEN_1_5B_MODEL_ID,
     label: 'Basic Model',
@@ -56,6 +65,14 @@ export const MODEL_CATALOG = [
   },
 ];
 
+const HOSTED_MODEL_CATALOG = LOCAL_MODEL_CATALOG.map((model, index) => ({
+  ...model,
+  id: [HOSTED_QWEN_1_5B_MODEL_ID, HOSTED_QWEN_3B_MODEL_ID, HOSTED_QWEN_7B_MODEL_ID][index],
+  local: false,
+}));
+
+export const MODEL_CATALOG = USE_LOCAL_MODELS ? LOCAL_MODEL_CATALOG : HOSTED_MODEL_CATALOG;
+
 const LOCAL_MODEL_CONFIGS = [
   {
     model_id: LOCAL_QWEN_1_5B_MODEL_ID,
@@ -74,16 +91,34 @@ const LOCAL_MODEL_CONFIGS = [
   },
 ];
 
+const HOSTED_MODEL_CONFIGS = [
+  {
+    model_id: HOSTED_QWEN_1_5B_MODEL_ID,
+    model: 'https://huggingface.co/mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+    model_lib: webllm.modelLibURLPrefix + webllm.modelVersion + '/Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm',
+  },
+  {
+    model_id: HOSTED_QWEN_3B_MODEL_ID,
+    model: 'https://huggingface.co/mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC',
+    model_lib: webllm.modelLibURLPrefix + webllm.modelVersion + '/Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm',
+  },
+  {
+    model_id: HOSTED_QWEN_7B_MODEL_ID,
+    model: 'https://huggingface.co/mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    model_lib: webllm.modelLibURLPrefix + webllm.modelVersion + '/Qwen2-7B-Instruct-q4f16_1_cs1k-webgpu.wasm',
+  },
+];
+
 const WEBLLM_APP_CONFIG = {
   cacheBackend: 'cache',
-  model_list: LOCAL_MODEL_CONFIGS,
+  model_list: USE_LOCAL_MODELS ? LOCAL_MODEL_CONFIGS : HOSTED_MODEL_CONFIGS,
 };
 
 const MODEL_CANDIDATES = {
-  ultra: LOCAL_QWEN_1_5B_MODEL_ID,
-  weak: LOCAL_QWEN_1_5B_MODEL_ID,
-  normal: LOCAL_QWEN_3B_MODEL_ID,
-  fallback: LOCAL_QWEN_1_5B_MODEL_ID,
+  ultra: USE_LOCAL_MODELS ? LOCAL_QWEN_1_5B_MODEL_ID : HOSTED_QWEN_1_5B_MODEL_ID,
+  weak: USE_LOCAL_MODELS ? LOCAL_QWEN_1_5B_MODEL_ID : HOSTED_QWEN_1_5B_MODEL_ID,
+  normal: USE_LOCAL_MODELS ? LOCAL_QWEN_3B_MODEL_ID : HOSTED_QWEN_3B_MODEL_ID,
+  fallback: USE_LOCAL_MODELS ? LOCAL_QWEN_1_5B_MODEL_ID : HOSTED_QWEN_1_5B_MODEL_ID,
 };
 
 let selectedModelPref = 'auto';
