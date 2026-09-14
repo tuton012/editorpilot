@@ -27,8 +27,7 @@ import {
   isMultilingualCapableModel,
   isAIReady,
   detectLanguageHeuristic,
-  GEMMA_2B_MODEL_ID,
-  GEMMA_MODEL_ID,
+  LOCAL_QWEN_3B_MODEL_ID,
   APP_NAME,
   MIN_TEXT_LENGTH,
   MAX_CORRECTION_LENGTH,
@@ -119,7 +118,7 @@ const LEGAL_CONTENT = {
       <h3>Local storage</h3>
       <p>Your drafts and settings are saved locally with SQLite WASM and the Origin Private File System (OPFS). You can export or delete this data anytime from the app.</p>
       <h3>Third-party models</h3>
-      <p>Language models load from public CDNs on first use and are cached in your browser. No text is sent to a backend operated by EditorPilot.</p>`,
+      <p>Language models load from the repository model folder and are cached in your browser. No text is sent to a backend operated by EditorPilot.</p>`,
   },
   terms: {
     title: 'Terms of Use',
@@ -1169,11 +1168,11 @@ function syncModelForLanguage() {
   });
 
   if (needsMultilingual && !isMultilingualCapableModel(modelSelect.value)) {
-    modelSelect.value = GEMMA_2B_MODEL_ID;
-    setSelectedModelPref(GEMMA_2B_MODEL_ID);
-    switchModel(GEMMA_2B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    setPreference('selected_model', GEMMA_2B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
-    showToast('This language uses Gemma 2 2B or Gemma 2 9B');
+    modelSelect.value = LOCAL_QWEN_3B_MODEL_ID;
+    setSelectedModelPref(LOCAL_QWEN_3B_MODEL_ID);
+    switchModel(LOCAL_QWEN_3B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    setPreference('selected_model', LOCAL_QWEN_3B_MODEL_ID).catch((err) => console.error('[ERROR]', err));
+    showToast('This language uses the local Qwen 3B model');
   }
 }
 

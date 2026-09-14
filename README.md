@@ -33,7 +33,7 @@ EditorPilot is designed so your writing stays with you. Core editing happens loc
 
 - A modern browser with WebGPU support
 - HTTPS or localhost when running locally
-- Internet access on first use so the AI model can download and cache
+- Internet access on first use so the AI model can download and cache, unless you install a local model bundle
 - Enough device storage and memory for local model files
 
 ## Support The Project
@@ -74,6 +74,24 @@ The editor is available at:
 
 ```text
 http://localhost:8000/editor/
+```
+
+## Local Models
+
+The editor supports multiple model bundles stored in the repository's root `model/` folder. Qwen2.5 3B Instruct q4f16 is the recommended local bundle for grammar correction; Qwen2.5 7B Instruct q4f16 is the quality-first option.
+
+Install the Hugging Face CLI, then download the MLC WebGPU bundle into the exact folder below:
+
+```powershell
+hf download mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-3B-Instruct-q4f16_1-MLC"
+```
+
+Choose `Qwen 3B (local)` in the editor. The folder must contain `mlc-chat-config.json`, tokenizer files, and model shards. The WebGPU runtime library is also expected locally in `model/runtime/`; the model weights and runtime are never loaded from an online model catalog.
+
+Quality-first option:
+
+```powershell
+hf download mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC --local-dir "model/Qwen2.5-7B-Instruct-q4f16_1-MLC"
 ```
 
 ## Project Structure

@@ -65,12 +65,9 @@
           <label class="model-select-label" for="model-select">Change model</label>
           <select id="model-select" class="model-select" title="Change local model">
             <option value="auto">Auto (recommended)</option>
-            <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2 360M</option>
-            <option value="Qwen2.5-0.5B-Instruct-q4f32_1-MLC">Qwen 0.5B</option>
-            <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B</option>
-            <option value="Qwen2.5-1.5B-Instruct-q4f32_1-MLC">Qwen 1.5B</option>
-            <option value="gemma-2-2b-it-q4f16_1-MLC" data-lang-only="true">Gemma 2 2B</option>
-            <option value="gemma-2-9b-it-q4f16_1-MLC" data-lang-only="true">Gemma 2 9B</option>
+            <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC-local">Qwen 1.5B (local)</option>
+            <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC-local">Qwen 3B (local)</option>
+            <option value="Qwen2.5-7B-Instruct-q4f16_1-MLC-local">Qwen 7B (local)</option>
           </select>
         </div>
         <div class="header-actions">
@@ -207,7 +204,7 @@
                   <option value="hindi">Hindi</option>
                   <option value="russian">Russian</option>
                   <option value="polish">Polish</option>
-                  <option value="" disabled class="lang-tier-hint">unlock more languages with Gemma 2 2B or Gemma 2 9B</option>
+                  <option value="" disabled class="lang-tier-hint">use a local Qwen model for more languages</option>
                 </select>
                 <button type="button" class="btn btn-sm" id="btn-compare" aria-pressed="false">Compare</button>
                 <button type="button" class="btn btn-sm" id="btn-rewrite">Rewrite</button>

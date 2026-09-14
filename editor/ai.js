@@ -1,15 +1,18 @@
-/**
- * CalmWorkspace — Local WebGPU AI engine (WebLLM)
+﻿/**
+ * CalmWorkspace ΓÇö Local WebGPU AI engine (WebLLM)
  */
 
 import * as webllm from 'https://esm.run/@mlc-ai/web-llm';
 
-export const GEMMA_2B_MODEL_ID = 'gemma-2-2b-it-q4f16_1-MLC';
-export const GEMMA_MODEL_ID = 'gemma-2-9b-it-q4f16_1-MLC';
-export const SMOLLM_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
-export const LLAMA_1B_MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+export const LOCAL_QWEN_1_5B_MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC-local';
+export const LOCAL_QWEN_3B_MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC-local';
+export const LOCAL_QWEN_7B_MODEL_ID = 'Qwen2.5-7B-Instruct-q4f16_1-MLC-local';
 
-export const MULTILINGUAL_MODEL_IDS = new Set([GEMMA_2B_MODEL_ID, GEMMA_MODEL_ID]);
+export const MULTILINGUAL_MODEL_IDS = new Set([
+  LOCAL_QWEN_1_5B_MODEL_ID,
+  LOCAL_QWEN_3B_MODEL_ID,
+  LOCAL_QWEN_7B_MODEL_ID,
+]);
 export const APP_NAME = 'EditorPilot';
 export const MIN_TEXT_LENGTH = 3;
 export const MAX_CORRECTION_LENGTH = 8000;
@@ -17,71 +20,70 @@ export const MAX_HIGHLIGHT_LENGTH = 2000;
 
 export const AVAILABLE_MODELS = [
   { id: 'auto', label: 'Auto (recommended)' },
-  { id: SMOLLM_MODEL_ID, label: 'SmolLM2 360M' },
-  { id: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC', label: 'Qwen 0.5B' },
-  { id: LLAMA_1B_MODEL_ID, label: 'Llama 3.2 1B' },
-  { id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC', label: 'Qwen 1.5B' },
-  { id: GEMMA_2B_MODEL_ID, label: 'Gemma 2 2B' },
-  { id: GEMMA_MODEL_ID, label: 'Gemma 2 9B' },
+  { id: LOCAL_QWEN_1_5B_MODEL_ID, label: 'Qwen 1.5B (local)' },
+  { id: LOCAL_QWEN_3B_MODEL_ID, label: 'Qwen 3B (local)' },
+  { id: LOCAL_QWEN_7B_MODEL_ID, label: 'Qwen 7B (local)' },
 ];
 
 /** User-facing model catalog for setup and model picker. */
 export const MODEL_CATALOG = [
   {
-    id: SMOLLM_MODEL_ID,
-    label: 'SmolLM2 360M',
-    size: '~200 MB',
-    description: 'Ultra-light. Best for very weak GPUs or when other models fail to load.',
-    languages: 'English',
-    tier: 'ultra',
-  },
-  {
-    id: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
-    label: 'Qwen 0.5B',
-    size: '~300 MB',
-    description: 'Light and fast. Best for laptops with integrated graphics or limited GPU memory.',
-    languages: 'English, Spanish',
-    tier: 'light',
-  },
-  {
-    id: LLAMA_1B_MODEL_ID,
-    label: 'Llama 3.2 1B',
-    size: '~700 MB',
-    description: 'Strong English editing on low-end hardware. A good alternative to Qwen 1.5B.',
-    languages: 'English',
+    id: LOCAL_QWEN_1_5B_MODEL_ID,
+    label: 'Qwen 1.5B (local)',
+    size: '~1.0 GB',
+    description: 'Local fallback for modest GPUs.',
+    languages: 'Many languages',
     tier: 'standard',
+    local: true,
   },
   {
-    id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
-    label: 'Qwen 1.5B',
-    size: '~900 MB',
-    description: 'Balanced quality and speed. A good default when your GPU has headroom.',
-    languages: 'English, Spanish',
-    tier: 'standard',
-  },
-  {
-    id: GEMMA_2B_MODEL_ID,
-    label: 'Gemma 2 2B',
-    size: '~1.4 GB',
-    description: 'Mid-tier multilingual model. Lighter than Gemma 9B with broader language support.',
-    languages: 'Most supported languages',
+    id: LOCAL_QWEN_3B_MODEL_ID,
+    label: 'Qwen 3B (local)',
+    size: '~2.5 GB',
+    description: 'Recommended local grammar model with stronger correction quality.',
+    languages: 'Many languages',
     tier: 'mid',
+    local: true,
   },
   {
-    id: GEMMA_MODEL_ID,
-    label: 'Gemma 2 9B',
-    size: '~5.5 GB',
-    description: 'Highest quality and all supported languages. Needs a strong GPU and plenty of VRAM.',
-    languages: 'All supported languages',
+    id: LOCAL_QWEN_7B_MODEL_ID,
+    label: 'Qwen 7B (local)',
+    size: '~5.1 GB',
+    description: 'Highest-quality local grammar and rewriting model.',
+    languages: 'Many languages',
     tier: 'heavy',
+    local: true,
   },
 ];
 
+const LOCAL_MODEL_CONFIGS = [
+  {
+    model_id: LOCAL_QWEN_1_5B_MODEL_ID,
+    model: new URL('../model/Qwen2.5-1.5B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model_lib: new URL('../model/runtime/Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
+  },
+  {
+    model_id: LOCAL_QWEN_3B_MODEL_ID,
+    model: new URL('../model/Qwen2.5-3B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model_lib: new URL('../model/runtime/Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
+  },
+  {
+    model_id: LOCAL_QWEN_7B_MODEL_ID,
+    model: new URL('../model/Qwen2.5-7B-Instruct-q4f16_1-MLC/', import.meta.url).href,
+    model_lib: new URL('../model/runtime/Qwen2-7B-Instruct-q4f16_1_cs1k-webgpu.wasm', import.meta.url).href,
+  },
+];
+
+const WEBLLM_APP_CONFIG = {
+  cacheBackend: 'cache',
+  model_list: LOCAL_MODEL_CONFIGS,
+};
+
 const MODEL_CANDIDATES = {
-  ultra: SMOLLM_MODEL_ID,
-  weak: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
-  normal: LLAMA_1B_MODEL_ID,
-  fallback: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
+  ultra: LOCAL_QWEN_1_5B_MODEL_ID,
+  weak: LOCAL_QWEN_1_5B_MODEL_ID,
+  normal: LOCAL_QWEN_3B_MODEL_ID,
+  fallback: LOCAL_QWEN_1_5B_MODEL_ID,
 };
 
 let selectedModelPref = 'auto';
@@ -125,10 +127,10 @@ function formatLoadingStatus(progress, statusText = '') {
   }
 
   if (pct !== null) {
-    return fromCache ? `Loading from cache… ${pct}%` : `Downloading… ${pct}%`;
+    return fromCache ? `Loading from cacheΓÇª ${pct}%` : `DownloadingΓÇª ${pct}%`;
   }
 
-  return fromCache ? 'Loading from cache… 0%' : 'Downloading… 0%';
+  return fromCache ? 'Loading from cacheΓÇª 0%' : 'DownloadingΓÇª 0%';
 }
 
 export function getCatalogModel(modelId) {
@@ -138,7 +140,7 @@ export function getCatalogModel(modelId) {
 export async function isModelCached(modelId) {
   if (!modelId || modelId === 'auto') return false;
   try {
-    return await webllm.hasModelInCache(modelId, webllm.prebuiltAppConfig);
+    return await webllm.hasModelInCache(modelId, WEBLLM_APP_CONFIG);
   } catch (err) {
     console.warn('[AI] cache check failed:', err);
     return false;
@@ -180,14 +182,14 @@ export function resolveModelId(pref) {
   return pref;
 }
 
-/** Prefer small fast models — conservative for integrated GPUs. */
+/** Prefer small fast models ΓÇö conservative for integrated GPUs. */
 export function selectModelForDevice() {
   const memory = navigator.deviceMemory || 4;
   if (memory >= 16) {
     return MODEL_CANDIDATES.normal;
   }
   if (memory >= 8) {
-    return 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC';
+    return MODEL_CANDIDATES.normal;
   }
   return MODEL_CANDIDATES.fallback;
 }
@@ -226,13 +228,13 @@ function parseBrowserName(userAgent = '') {
 export async function getUserDeviceSpecs(gpuResult = null) {
   const gpu = gpuResult || (await checkWebGPUSupport());
   let gpuName = 'Not detected';
-  let gpuVendor = '—';
+  let gpuVendor = 'ΓÇö';
 
   if (gpu.adapter) {
     try {
       const info = gpu.adapter.info;
       gpuName = info?.description || info?.device || 'GPU detected';
-      gpuVendor = info?.vendor || '—';
+      gpuVendor = info?.vendor || 'ΓÇö';
     } catch {
       gpuName = 'GPU detected';
     }
@@ -260,9 +262,9 @@ export async function getUserDeviceSpecs(gpuResult = null) {
     webgpuStatus: gpu.confirmed
       ? 'Confirmed'
       : gpu.warning
-        ? 'API available — will verify when loading model'
+        ? 'API available ΓÇö will verify when loading model'
         : 'Not available',
-    screen: `${window.screen.width} × ${window.screen.height}`,
+    screen: `${window.screen.width} ├ù ${window.screen.height}`,
     pixelRatio: window.devicePixelRatio || 1,
     userAgent,
   };
@@ -279,13 +281,13 @@ export async function checkWebGPUSupport() {
       return { supported: true, adapter, confirmed: true };
     }
 
-    // WebGPU API exists but adapter probe failed — allow continue; WebLLM may still load.
+    // WebGPU API exists but adapter probe failed ΓÇö allow continue; WebLLM may still load.
     return {
       supported: true,
       adapter: null,
       confirmed: false,
       warning:
-        'WebGPU API is available but this quick check could not confirm a GPU adapter. You can continue — EditorPilot will verify when loading your model.',
+        'WebGPU API is available but this quick check could not confirm a GPU adapter. You can continue ΓÇö EditorPilot will verify when loading your model.',
     };
   } catch (err) {
     console.error('[ERROR]', err);
@@ -348,7 +350,7 @@ export async function checkDeviceCapabilities(gpuResult = null) {
   if (integrated || memory <= 4) {
     recommendedModelId = MODEL_CANDIDATES.fallback;
   } else if (memory >= 16 && !integrated) {
-    recommendedModelId = 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC';
+    recommendedModelId = MODEL_CANDIDATES.normal;
   } else if (memory >= 8) {
     recommendedModelId = MODEL_CANDIDATES.normal;
   }
@@ -435,7 +437,7 @@ export async function resetAI() {
 }
 
 async function recoverFromGPUError() {
-  console.warn('[AI] Recovering from GPU error — switching to lighter model');
+  console.warn('[AI] Recovering from GPU error ΓÇö switching to lighter model');
   const previousPref = selectedModelPref;
   await resetAI();
   selectedModelPref = MODEL_CANDIDATES.fallback;
@@ -506,7 +508,7 @@ async function loadEngine(pref, modelId) {
   selectedModelPref = pref;
   currentModelId = modelId;
 
-  emitStatus('Loading…', 'loading', 0);
+  emitStatus('LoadingΓÇª', 'loading', 0);
 
   const modelsToTry = [modelId];
   if (!modelsToTry.includes(MODEL_CANDIDATES.fallback)) {
@@ -518,6 +520,7 @@ async function loadEngine(pref, modelId) {
   for (const tryModel of modelsToTry) {
     try {
       engine = await webllm.CreateMLCEngine(tryModel, {
+        appConfig: WEBLLM_APP_CONFIG,
         initProgressCallback: (report) => {
           emitStatus(
             formatLoadingStatus(report.progress, report.text),
@@ -599,19 +602,19 @@ export function getCorrectionMessages(mode, text) {
     creative: 'Rewrite with more vivid, expressive language while keeping the same meaning.',
     formal: 'Rewrite in a formal, polished register. Keep the same meaning.',
     casual: 'Rewrite in a relaxed, conversational tone. Keep the same meaning.',
-    spanish: 'Corrige gramática, ortografía y puntuación en español. Mantén el mismo significado.',
-    french: 'Corrigez la grammaire et l\'orthographe en français. Gardez le même sens.',
+    spanish: 'Corrige gram├ítica, ortograf├¡a y puntuaci├│n en espa├▒ol. Mant├⌐n el mismo significado.',
+    french: 'Corrigez la grammaire et l\'orthographe en fran├ºais. Gardez le m├¬me sens.',
     german: 'Korrigiere Grammatik und Rechtschreibung auf Deutsch. Gleiche Bedeutung beibehalten.',
-    portuguese: 'Corrija gramática e ortografia em português. Mantenha o mesmo significado.',
+    portuguese: 'Corrija gram├ítica e ortografia em portugu├¬s. Mantenha o mesmo significado.',
     italian: 'Correggi grammatica e ortografia in italiano. Mantieni lo stesso significato.',
     dutch: 'Corrigeer grammatica en spelling in het Nederlands. Behoud dezelfde betekenis.',
-    chinese: '修正中文的语法、标点和用词，保持原意。',
-    japanese: '日本語の文法・表記・句読点を修正し、意味はそのままに。',
-    korean: '한국어 맞춤법·문법·띄어쓰기를 교정하고 의미는 동일하게 유지하세요.',
-    arabic: 'صحح القواعد والإملاء بالعربية مع الحفاظ على المعنى.',
-    hindi: 'हिंदी व्याकरण और वर्तनी सुधारें, अर्थ वही रखें।',
-    russian: 'Исправьте грамматику и орфографию на русском, сохраните смысл.',
-    polish: 'Popraw gramatykę i ortografię po polsku, zachowaj znaczenie.',
+    chinese: 'Σ┐«µ¡úΣ╕¡µûçτÜäΦ»¡µ│òπÇüµáçτé╣σÆîτö¿Φ»ì∩╝îΣ┐¥µîüσÄƒµäÅπÇé',
+    japanese: 'µùÑµ£¼Φ¬₧πü«µûçµ│òπâ╗Φí¿Φ¿ÿπâ╗σÅÑΦ¬¡τé╣πéÆΣ┐«µ¡úπüùπÇüµäÅσæ│πü»πü¥πü«πü╛πü╛πü½πÇé',
+    korean: 'φò£Ω╡¡∞û┤ δº₧∞╢ñδ▓ò┬╖δ¼╕δ▓ò┬╖δ¥ä∞û┤∞ô░Ω╕░δÑ╝ Ω╡É∞áòφòÿΩ│á ∞¥ÿδ»╕δèö δÅÖ∞¥╝φòÿΩ▓î ∞£á∞ºÇφòÿ∞ä╕∞Üö.',
+    arabic: '╪╡╪¡╪¡ ╪º┘ä┘é┘ê╪º╪╣╪» ┘ê╪º┘ä╪Ñ┘à┘ä╪º╪í ╪¿╪º┘ä╪╣╪▒╪¿┘è╪⌐ ┘à╪╣ ╪º┘ä╪¡┘ü╪º╪╕ ╪╣┘ä┘ë ╪º┘ä┘à╪╣┘å┘ë.',
+    hindi: 'αñ╣αñ┐αñéαñªαÑÇ αñ╡αÑìαñ»αñ╛αñòαñ░αñú αñöαñ░ αñ╡αñ░αÑìαññαñ¿αÑÇ αñ╕αÑüαñºαñ╛αñ░αÑçαñé, αñàαñ░αÑìαñÑ αñ╡αñ╣αÑÇ αñ░αñûαÑçαñéαÑñ',
+    russian: '╨ÿ╤ü╨┐╤Ç╨░╨▓╤î╤é╨╡ ╨│╤Ç╨░╨╝╨╝╨░╤é╨╕╨║╤â ╨╕ ╨╛╤Ç╤ä╨╛╨│╤Ç╨░╤ä╨╕╤Ä ╨╜╨░ ╤Ç╤â╤ü╤ü╨║╨╛╨╝, ╤ü╨╛╤à╤Ç╨░╨╜╨╕╤é╨╡ ╤ü╨╝╤ï╤ü╨╗.',
+    polish: 'Popraw gramatyk─Ö i ortografi─Ö po polsku, zachowaj znaczenie.',
   };
 
   const task = instructions[mode] || instructions.grammar;
@@ -626,7 +629,7 @@ export function getCorrectionMessages(mode, text) {
 
 /** Instruction strings for stripping leaked prompts from model output. */
 const INSTRUCTION_SNIPPETS = [
-  'Fix spelling', 'Return only', 'Same meaning', 'Corrige gramática', 'ortografía y puntuación',
+  'Fix spelling', 'Return only', 'Same meaning', 'Corrige gram├ítica', 'ortograf├¡a y puntuaci├│n',
   'Mismo significado', 'Solo el texto', 'Rewrite', 'Do not add', 'Keep the same',
   'Text to edit', 'Turn into', 'professional', 'workplace-friendly',
 ];
@@ -660,7 +663,7 @@ function cleanCorrectionOutput(raw, originalText, mode) {
     const isInstruction =
       !line ||
       INSTRUCTION_SNIPPETS.some((s) => line.toLowerCase().includes(s.toLowerCase())) ||
-      /^[\-\*•]/.test(line);
+      /^[\-\*ΓÇó]/.test(line);
     if (!isInstruction || line.length > 200) break;
     lines.shift();
   }
@@ -842,7 +845,7 @@ export async function runRewriteVariants(text, requestId) {
   if (isStale(requestId)) return [];
 
   return runExclusive(requestId, async () => {
-    emitStatus('Checking…', 'loading');
+    emitStatus('CheckingΓÇª', 'loading');
     const variants = [];
     const seen = new Set();
 
@@ -890,7 +893,7 @@ export async function runCorrection(mode, text, requestId) {
 
   return runExclusive(requestId, async () => {
     console.log('[AI] Correction started');
-    emitStatus('Checking…', 'loading');
+    emitStatus('CheckingΓÇª', 'loading');
 
     try {
       const result = await generateCorrection(mode, text, requestId, {
@@ -960,7 +963,7 @@ export function parseGrammarIssues(rawJson, sourceText) {
   return valid;
 }
 
-/** Fast local checks — no AI, instant underline hints. */
+/** Fast local checks ΓÇö no AI, instant underline hints. */
 export function analyzeGrammarIssuesLocal(text) {
   if (!text || text.length < MIN_TEXT_LENGTH) return [];
 
@@ -1094,19 +1097,19 @@ const TRANSLATION_LABELS = Object.fromEntries(
 const CORRECTION_BATCH_SIZE = 3500;
 
 const LANGUAGE_HINTS = [
-  { id: 'spanish', re: /[¿¡ñáéíóúü]/i, words: /\b(el|la|los|las|que|de|en|un|una|por|con|para|es|está|como|pero|más|muy|también|qué|hola|gracias)\b/i },
-  { id: 'french', re: /[àâçéèêëîïôùûü]/i, words: /\b(le|la|les|de|des|un|une|et|est|dans|pour|que|qui|avec|pas|plus|très|bonjour|merci)\b/i },
-  { id: 'german', re: /[äöüß]/i, words: /\b(der|die|das|und|ist|in|den|von|zu|mit|sich|auf|für|nicht|auch|ein|eine|ich|wir)\b/i },
-  { id: 'portuguese', re: /[ãõáéíóúç]/i, words: /\b(o|a|os|as|de|que|em|um|uma|para|com|não|por|mais|como|muito|obrigado|olá)\b/i },
-  { id: 'italian', re: /[àèéìíîòóùú]/i, words: /\b(il|lo|la|i|gli|le|di|che|e|un|una|per|con|non|più|come|molto|ciao|grazie)\b/i },
-  { id: 'dutch', re: /[ëï]/i, words: /\b(de|het|een|en|van|in|is|dat|op|te|voor|met|niet|zijn|ook|als|maar)\b/i },
+  { id: 'spanish', re: /[┬┐┬í├▒├í├⌐├¡├│├║├╝]/i, words: /\b(el|la|los|las|que|de|en|un|una|por|con|para|es|est├í|como|pero|m├ís|muy|tambi├⌐n|qu├⌐|hola|gracias)\b/i },
+  { id: 'french', re: /[├á├ó├º├⌐├¿├¬├½├«├»├┤├╣├╗├╝]/i, words: /\b(le|la|les|de|des|un|une|et|est|dans|pour|que|qui|avec|pas|plus|tr├¿s|bonjour|merci)\b/i },
+  { id: 'german', re: /[├ñ├╢├╝├ƒ]/i, words: /\b(der|die|das|und|ist|in|den|von|zu|mit|sich|auf|f├╝r|nicht|auch|ein|eine|ich|wir)\b/i },
+  { id: 'portuguese', re: /[├ú├╡├í├⌐├¡├│├║├º]/i, words: /\b(o|a|os|as|de|que|em|um|uma|para|com|n├úo|por|mais|como|muito|obrigado|ol├í)\b/i },
+  { id: 'italian', re: /[├á├¿├⌐├¼├¡├«├▓├│├╣├║]/i, words: /\b(il|lo|la|i|gli|le|di|che|e|un|una|per|con|non|pi├╣|come|molto|ciao|grazie)\b/i },
+  { id: 'dutch', re: /[├½├»]/i, words: /\b(de|het|een|en|van|in|is|dat|op|te|voor|met|niet|zijn|ook|als|maar)\b/i },
   { id: 'chinese', re: /[\u4e00-\u9fff]/ },
   { id: 'japanese', re: /[\u3040-\u30ff\u4e00-\u9fff]/ },
   { id: 'korean', re: /[\uac00-\ud7af]/ },
   { id: 'arabic', re: /[\u0600-\u06ff]/ },
   { id: 'hindi', re: /[\u0900-\u097f]/ },
   { id: 'russian', re: /[\u0400-\u04ff]/ },
-  { id: 'polish', re: /[ąćęłńóśźż]/i, words: /\b(i|w|na|z|do|nie|to|jest|się|że|od|jak|ale|czy|też|dla)\b/i },
+  { id: 'polish', re: /[─à─ç─Ö┼é┼ä├│┼¢┼║┼╝]/i, words: /\b(i|w|na|z|do|nie|to|jest|si─Ö|┼╝e|od|jak|ale|czy|te┼╝|dla)\b/i },
 ];
 
 /** Lightweight language guess for auto-detect and translation routing. */
@@ -1231,7 +1234,7 @@ async function generateTranslation(targetLang, text, requestId, options = {}) {
 }
 
 /**
- * Correct (and optionally translate) text in batches — no length cap.
+ * Correct (and optionally translate) text in batches ΓÇö no length cap.
  * onProgress({ phase: 'fixing'|'translating', batch, total })
  */
 export async function runCorrectionPipeline(styleMode, text, outputLang, requestId, onProgress) {
